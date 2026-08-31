@@ -1,5 +1,5 @@
 {
-  "_comment": "Meditation tracks. Add or remove entries here - the app reads this file at startup. Each 'files' entry is one or more object names in the bucket; multiple files play back-to-back as a single track.",
+  "_comment": "Meditation tracks (numbers 02-122). Add/remove entries here - the app reads this file at startup. Each 'files' entry lists one or more object names in the bucket; multiple files play back-to-back as one track. Note some files are .MP3 and some .mp3.",
   "baseUrl": "https://qrdpstvibstonmwlmhbu.supabase.co/storage/v1/object/public/es%20dhammo%20sanatano",
   "tracks": [
     {
@@ -75,6 +75,30 @@
       ]
     },
     {
+      "title": "Es Dhammo Sanantano 14",
+      "files": [
+        "Es Dhammo Sanantano 14.mp3"
+      ]
+    },
+    {
+      "title": "Es Dhammo Sanantano 15",
+      "files": [
+        "Es Dhammo Sanantano 15.mp3"
+      ]
+    },
+    {
+      "title": "Es Dhammo Sanantano 16",
+      "files": [
+        "Es Dhammo Sanantano 16.mp3"
+      ]
+    },
+    {
+      "title": "Es Dhammo Sanantano 17",
+      "files": [
+        "Es Dhammo Sanantano 17.mp3"
+      ]
+    },
+    {
       "title": "Es Dhammo Sanantano 18",
       "files": [
         "Es Dhammo Sanantano 18.MP3"
@@ -141,6 +165,30 @@
       ]
     },
     {
+      "title": "Es Dhammo Sanantano 29",
+      "files": [
+        "Es Dhammo Sanantano 29.mp3"
+      ]
+    },
+    {
+      "title": "Es Dhammo Sanantano 30",
+      "files": [
+        "Es Dhammo Sanantano 30.mp3"
+      ]
+    },
+    {
+      "title": "Es Dhammo Sanantano 31",
+      "files": [
+        "Es Dhammo Sanantano 31.mp3"
+      ]
+    },
+    {
+      "title": "Es Dhammo Sanantano 32",
+      "files": [
+        "Es Dhammo Sanantano 32.mp3"
+      ]
+    },
+    {
       "title": "Es Dhammo Sanantano 33",
       "files": [
         "Es Dhammo Sanantano 33.MP3"
@@ -183,15 +231,129 @@
       ]
     },
     {
+      "title": "Es Dhammo Sanantano 40",
+      "files": [
+        "Es Dhammo Sanantano 40.mp3"
+      ]
+    },
+    {
+      "title": "Es Dhammo Sanantano 41",
+      "files": [
+        "Es Dhammo Sanantano 41.mp3"
+      ]
+    },
+    {
       "title": "Es Dhammo Sanantano 42",
       "files": [
         "Es Dhammo Sanantano 42.MP3"
       ]
     },
     {
+      "title": "Es Dhammo Sanantano 43",
+      "files": [
+        "Es Dhammo Sanantano 43.mp3"
+      ]
+    },
+    {
+      "title": "Es Dhammo Sanantano 44",
+      "files": [
+        "Es Dhammo Sanantano 44.mp3"
+      ]
+    },
+    {
+      "title": "Es Dhammo Sanantano 45",
+      "files": [
+        "Es Dhammo Sanantano 45.mp3"
+      ]
+    },
+    {
+      "title": "Es Dhammo Sanantano 46",
+      "files": [
+        "Es Dhammo Sanantano 46.mp3"
+      ]
+    },
+    {
+      "title": "Es Dhammo Sanantano 47",
+      "files": [
+        "Es Dhammo Sanantano 47.mp3"
+      ]
+    },
+    {
+      "title": "Es Dhammo Sanantano 48",
+      "files": [
+        "Es Dhammo Sanantano 48.mp3"
+      ]
+    },
+    {
+      "title": "Es Dhammo Sanantano 49",
+      "files": [
+        "Es Dhammo Sanantano 49.mp3"
+      ]
+    },
+    {
+      "title": "Es Dhammo Sanantano 50",
+      "files": [
+        "Es Dhammo Sanantano 50.mp3"
+      ]
+    },
+    {
+      "title": "Es Dhammo Sanantano 51",
+      "files": [
+        "Es Dhammo Sanantano 51.mp3"
+      ]
+    },
+    {
+      "title": "Es Dhammo Sanantano 52",
+      "files": [
+        "Es Dhammo Sanantano 52.mp3"
+      ]
+    },
+    {
+      "title": "Es Dhammo Sanantano 53",
+      "files": [
+        "Es Dhammo Sanantano 53.mp3"
+      ]
+    },
+    {
+      "title": "Es Dhammo Sanantano 54",
+      "files": [
+        "Es Dhammo Sanantano 54.mp3"
+      ]
+    },
+    {
+      "title": "Es Dhammo Sanantano 55",
+      "files": [
+        "Es Dhammo Sanantano 55.mp3"
+      ]
+    },
+    {
       "title": "Es Dhammo Sanantano 56",
       "files": [
         "Es Dhammo Sanantano 56.MP3"
+      ]
+    },
+    {
+      "title": "Es Dhammo Sanantano 57",
+      "files": [
+        "Es Dhammo Sanantano 57.mp3"
+      ]
+    },
+    {
+      "title": "Es Dhammo Sanantano 58",
+      "files": [
+        "Es Dhammo Sanantano 58.mp3"
+      ]
+    },
+    {
+      "title": "Es Dhammo Sanantano 59",
+      "files": [
+        "Es Dhammo Sanantano 59.mp3"
+      ]
+    },
+    {
+      "title": "Es Dhammo Sanantano 60",
+      "files": [
+        "Es Dhammo Sanantano 60.mp3"
       ]
     },
     {
@@ -336,9 +498,21 @@
       ]
     },
     {
+      "title": "Es Dhammo Sanantano 84",
+      "files": [
+        "Es Dhammo Sanantano 84.mp3"
+      ]
+    },
+    {
       "title": "Es Dhammo Sanantano 85",
       "files": [
         "Es Dhammo Sanantano 85.MP3"
+      ]
+    },
+    {
+      "title": "Es Dhammo Sanantano 86",
+      "files": [
+        "Es Dhammo Sanantano 86.mp3"
       ]
     },
     {
@@ -495,9 +669,21 @@
       ]
     },
     {
+      "title": "Es Dhammo Sanantano 112",
+      "files": [
+        "Es Dhammo Sanantano 112.mp3"
+      ]
+    },
+    {
       "title": "Es Dhammo Sanantano 113",
       "files": [
         "Es Dhammo Sanantano 113.MP3"
+      ]
+    },
+    {
+      "title": "Es Dhammo Sanantano 114",
+      "files": [
+        "Es Dhammo Sanantano 114.mp3"
       ]
     },
     {
@@ -505,6 +691,12 @@
       "files": [
         "Es Dhammo Sanantano 115_part1.mp3",
         "Es Dhammo Sanantano 115_part2.mp3"
+      ]
+    },
+    {
+      "title": "Es Dhammo Sanantano 116",
+      "files": [
+        "Es Dhammo Sanantano 116.mp3"
       ]
     },
     {
