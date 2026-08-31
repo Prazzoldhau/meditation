@@ -1,0 +1,72 @@
+workflows:
+  android-workflow:
+    name: Osho Meditation - Android
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      flutter: stable
+      groups:
+        # Create this group in Codemagic UI > Teams > Environment variables
+        # with SUPABASE_URL and SUPABASE_ANON_KEY (mark them "Secure").
+        - supabase
+    scripts:
+      - name: Generate native android/ project (not kept in git)
+        script: |
+          if [ ! -d "android" ]; then
+            flutter create . --platforms=android --org com.oshomeditation --project-name osho_meditation
+          fi
+      - name: Get Flutter packages
+        script: flutter pub get
+      - name: Build APK
+        script: |
+          flutter build apk --release \
+            --dart-define=SUPABASE_URL=$SUPABASE_URL \
+            --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY
+    artifacts:
+      - build/app/outputs/flutter-apk/*.apk
+    publishing:
+      email:
+        recipients:
+          - aestheticphysiox@gmail.com
+        notify:
+          success: true
+          failure: true
+
+  ios-workflow:
+    name: Osho Meditation - iOS
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      flutter: stable
+      groups:
+        - supabase
+      # Requires an App Store Connect integration + iOS code signing set up
+      # in Codemagic UI (Team settings > Code signing identities) before
+      # this workflow will succeed.
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.oshomeditation.oshoMeditation
+    scripts:
+      - name: Generate native ios/ project (not kept in git)
+        script: |
+          if [ ! -d "ios" ]; then
+            flutter create . --platforms=ios --org com.oshomeditation --project-name osho_meditation
+          fi
+      - name: Get Flutter packages
+        script: flutter pub get
+      - name: Set up code signing
+        script: xcode-project use-profiles
+      - name: Build IPA
+        script: |
+          flutter build ipa --release \
+            --dart-define=SUPABASE_URL=$SUPABASE_URL \
+            --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY
+    artifacts:
+      - build/ios/ipa/*.ipa
+    publishing:
+      email:
+        recipients:
+          - aestheticphysiox@gmail.com
+        notify:
+          success: true
+          failure: true
