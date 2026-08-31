@@ -13,8 +13,23 @@ class PlayerScreen extends StatefulWidget {
 }
 
 class _PlayerScreenState extends State<PlayerScreen> {
-  final _player = AudioPlayer();
-  bool _loading = true;
+  // Tuned so playback starts as soon as ~1s of audio is buffered, then keeps
+  // filling in the background - like a YouTube video, not a full download.
+  final _player = AudioPlayer(
+    audioLoadConfiguration: const AudioLoadConfiguration(
+      androidLoadControl: AndroidLoadControl(
+        minBufferDuration: Duration(seconds: 15),
+        maxBufferDuration: Duration(seconds: 45),
+        bufferForPlaybackDuration: Duration(milliseconds: 1000),
+        bufferForPlaybackAfterRebufferDuration: Duration(seconds: 3),
+      ),
+      darwinLoadControl: DarwinLoadControl(
+        automaticallyWaitsToMinimizeStalling: false,
+        preferredForwardBufferDuration: Duration(seconds: 6),
+      ),
+    ),
+  );
+
   String? _error;
 
   @override
@@ -24,6 +39,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   Future<void> _load() async {
+    setState(() => _error = null);
     try {
       final sources = [
         for (final url in widget.track.urls) AudioSource.uri(Uri.parse(url)),
@@ -31,17 +47,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
       await _player.setAudioSource(
         sources.length == 1
             ? sources.first
-            : ConcatenatingAudioSource(children: sources),
+            : ConcatenatingAudioSource(
+                useLazyPreparation: true, // don't touch part 2 until near it
+                children: sources,
+              ),
+        preload: true,
       );
       await _player.play();
-      if (mounted) setState(() => _loading = false);
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _loading = false;
-          _error = 'Could not load this meditation:\n$e';
-        });
-      }
+      if (mounted) setState(() => _error = '$e');
     }
   }
 
@@ -51,7 +65,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
     super.dispose();
   }
 
-  static String _fmt(Duration d) {
+  static String _fmt(Duration? d) {
+    if (d == null) return '--:--';
     final h = d.inHours;
     final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
     final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
@@ -60,73 +75,119 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(title: Text(widget.track.title)),
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: _loading
-              ? const CircularProgressIndicator()
-              : _error != null
-                  ? Text(
-                      _error!,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                    )
-                  : _buildPlayer(context),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.self_improvement, size: 96, color: scheme.primary),
+              const SizedBox(height: 24),
+              if (widget.track.isMultiPart) _partIndicator(context),
+              _progress(context),
+              const SizedBox(height: 8),
+              _controls(context),
+              if (_error != null) _errorBar(context),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildPlayer(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(Icons.self_improvement, size: 96, color: scheme.primary),
-        const SizedBox(height: 24),
-
-        if (widget.track.isMultiPart)
-          StreamBuilder<int?>(
-            stream: _player.currentIndexStream,
-            builder: (context, snap) {
-              final part = (snap.data ?? 0) + 1;
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Text(
-                  'Part $part of ${widget.track.partCount}',
-                  style: Theme.of(context).textTheme.labelLarge,
-                ),
-              );
-            },
+  Widget _partIndicator(BuildContext context) {
+    return StreamBuilder<int?>(
+      stream: _player.currentIndexStream,
+      builder: (context, snap) {
+        final part = (snap.data ?? 0) + 1;
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Text(
+            'Part $part of ${widget.track.partCount}',
+            style: Theme.of(context).textTheme.labelLarge,
           ),
+        );
+      },
+    );
+  }
 
-        StreamBuilder<Duration?>(
-          stream: _player.durationStream,
-          builder: (context, durationSnap) {
-            final duration = durationSnap.data ?? Duration.zero;
+  Widget _progress(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return StreamBuilder<Duration?>(
+      stream: _player.durationStream,
+      builder: (context, durationSnap) {
+        final duration = durationSnap.data;
+        final maxMs = (duration?.inMilliseconds ?? 0).toDouble();
+        final ready = maxMs > 0;
+
+        return StreamBuilder<Duration>(
+          stream: _player.positionStream,
+          builder: (context, posSnap) {
+            final position = posSnap.data ?? Duration.zero;
             return StreamBuilder<Duration>(
-              stream: _player.positionStream,
-              builder: (context, positionSnap) {
-                var position = positionSnap.data ?? Duration.zero;
-                if (position > duration) position = duration;
-                final maxMs = duration.inMilliseconds.toDouble();
+              stream: _player.bufferedPositionStream,
+              builder: (context, bufSnap) {
+                final buffered = bufSnap.data ?? Duration.zero;
+                final sliderMax = ready ? maxMs : 1.0;
+                final posMs = position.inMilliseconds
+                    .toDouble()
+                    .clamp(0.0, sliderMax)
+                    .toDouble();
+                final double bufFrac = ready
+                    ? (buffered.inMilliseconds / maxMs).clamp(0.0, 1.0).toDouble()
+                    : 0.0;
+
                 return Column(
                   children: [
-                    Slider(
-                      min: 0,
-                      max: maxMs <= 0 ? 1 : maxMs,
-                      value: position.inMilliseconds
-                          .toDouble()
-                          .clamp(0, maxMs <= 0 ? 1 : maxMs),
-                      onChanged: maxMs <= 0
-                          ? null
-                          : (v) => _player.seek(
-                                Duration(milliseconds: v.round()),
+                    SizedBox(
+                      height: 40,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          // YouTube-style "buffered ahead" bar behind the thumb
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 6),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(2),
+                              child: LinearProgressIndicator(
+                                value: bufFrac,
+                                minHeight: 4,
+                                backgroundColor:
+                                    scheme.onSurface.withValues(alpha: 0.12),
+                                valueColor: AlwaysStoppedAnimation(
+                                  scheme.primary.withValues(alpha: 0.30),
+                                ),
                               ),
+                            ),
+                          ),
+                          SliderTheme(
+                            data: SliderTheme.of(context).copyWith(
+                              trackHeight: 4,
+                              inactiveTrackColor: Colors.transparent,
+                              overlayShape: const RoundSliderOverlayShape(
+                                overlayRadius: 12,
+                              ),
+                              thumbShape: const RoundSliderThumbShape(
+                                enabledThumbRadius: 6,
+                              ),
+                            ),
+                            child: Slider(
+                              min: 0,
+                              max: sliderMax,
+                              value: posMs,
+                              materialTapTargetSize:
+                                  MaterialTapTargetSize.shrinkWrap,
+                              onChanged: ready
+                                  ? (v) => _player
+                                      .seek(Duration(milliseconds: v.round()))
+                                  : null,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -143,37 +204,35 @@ class _PlayerScreenState extends State<PlayerScreen> {
               },
             );
           },
-        ),
-        const SizedBox(height: 8),
+        );
+      },
+    );
+  }
 
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (widget.track.isMultiPart)
-              IconButton(
-                iconSize: 40,
-                icon: const Icon(Icons.skip_previous),
-                onPressed: () => _player.seekToPrevious(),
-              ),
-            StreamBuilder<PlayerState>(
-              stream: _player.playerStateStream,
-              builder: (context, snapshot) {
-                final state = snapshot.data;
-                final processing = state?.processingState;
-                if (processing == ProcessingState.loading ||
-                    processing == ProcessingState.buffering) {
-                  return const Padding(
-                    padding: EdgeInsets.all(12),
-                    child: SizedBox(
-                      width: 40,
-                      height: 40,
-                      child: CircularProgressIndicator(strokeWidth: 3),
-                    ),
-                  );
-                }
-                final playing = state?.playing ?? false;
-                final ended = processing == ProcessingState.completed;
-                return IconButton(
+  Widget _controls(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        if (widget.track.isMultiPart)
+          IconButton(
+            iconSize: 40,
+            icon: const Icon(Icons.skip_previous),
+            onPressed: () => _player.seekToPrevious(),
+          ),
+        StreamBuilder<PlayerState>(
+          stream: _player.playerStateStream,
+          builder: (context, snapshot) {
+            final state = snapshot.data;
+            final processing = state?.processingState;
+            final busy = processing == ProcessingState.loading ||
+                processing == ProcessingState.buffering;
+            final playing = state?.playing ?? false;
+            final ended = processing == ProcessingState.completed;
+
+            return Stack(
+              alignment: Alignment.center,
+              children: [
+                IconButton(
                   iconSize: 64,
                   icon: Icon(
                     ended
@@ -192,18 +251,43 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       _player.play();
                     }
                   },
-                );
-              },
-            ),
-            if (widget.track.isMultiPart)
-              IconButton(
-                iconSize: 40,
-                icon: const Icon(Icons.skip_next),
-                onPressed: () => _player.seekToNext(),
-              ),
-          ],
+                ),
+                // thin ring over the button while (re)buffering - playback
+                // controls stay usable underneath
+                if (busy)
+                  const SizedBox(
+                    width: 64,
+                    height: 64,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+              ],
+            );
+          },
         ),
+        if (widget.track.isMultiPart)
+          IconButton(
+            iconSize: 40,
+            icon: const Icon(Icons.skip_next),
+            onPressed: () => _player.seekToNext(),
+          ),
       ],
+    );
+  }
+
+  Widget _errorBar(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 20),
+      child: Column(
+        children: [
+          Text(
+            'Could not play this meditation.\n$_error',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
+          const SizedBox(height: 8),
+          FilledButton.tonal(onPressed: _load, child: const Text('Retry')),
+        ],
+      ),
     );
   }
 }

@@ -39,6 +39,13 @@ in `codemagic.yaml` regenerates `ios/` via `scripts/codemagic_pre_build.sh`.
 - `lib/screens/player_screen.dart` plays a track with `just_audio` — a single
   `AudioSource.uri` for one file, a `ConcatenatingAudioSource` for multi-part,
   with a "Part n of m" indicator and skip buttons.
+- **Nothing is downloaded at startup** — only `tracks.json`. A track streams
+  progressively when you open it (like a YouTube video): playback starts once
+  ~1s is buffered (`AndroidLoadControl.bufferForPlaybackDuration`), the scrub
+  bar shows immediately, and a lighter bar behind it shows how far ahead the
+  buffer has filled. Multi-part tracks use `useLazyPreparation` so part 2 isn't
+  touched until playback nears it. Audio stops when the app is backgrounded
+  (no `just_audio_background` / lock-screen controls yet).
 
 ### Adding / removing meditations
 
