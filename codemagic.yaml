@@ -5,10 +5,6 @@ workflows:
     instance_type: linux_x2
     environment:
       flutter: stable
-      groups:
-        # Create this group in Codemagic UI > Teams > Environment variables
-        # with SUPABASE_URL and SUPABASE_ANON_KEY (mark them "Secure").
-        - supabase
     scripts:
       # android/ is committed (like the qr_scanner app), so no `flutter create`.
       - name: Get Flutter packages
@@ -16,10 +12,7 @@ workflows:
       - name: Generate launcher icons
         script: dart run flutter_launcher_icons
       - name: Build APK
-        script: |
-          flutter build apk --release \
-            --dart-define=SUPABASE_URL=$SUPABASE_URL \
-            --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY
+        script: flutter build apk --release
     artifacts:
       - build/app/outputs/flutter-apk/*.apk
     publishing:
@@ -36,8 +29,6 @@ workflows:
     instance_type: mac_mini_m2
     environment:
       flutter: stable
-      groups:
-        - supabase
       # Requires an App Store Connect integration + iOS code signing set up
       # in Codemagic UI (Team settings > Code signing identities) before
       # this workflow will succeed.
@@ -51,10 +42,7 @@ workflows:
       - name: Set up code signing
         script: xcode-project use-profiles
       - name: Build IPA
-        script: |
-          flutter build ipa --release \
-            --dart-define=SUPABASE_URL=$SUPABASE_URL \
-            --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY
+        script: flutter build ipa --release
     artifacts:
       - build/ios/ipa/*.ipa
     publishing:

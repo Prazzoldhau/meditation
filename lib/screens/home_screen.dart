@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/meditation_track.dart';
 import '../services/meditation_service.dart';
@@ -14,8 +13,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  late final MeditationService _service =
-      MeditationService(Supabase.instance.client);
+  static const _service = MeditationService();
   late Future<List<MeditationTrack>> _tracksFuture;
 
   @override
@@ -36,10 +34,9 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (context, snapshot) {
         final waiting = snapshot.connectionState == ConnectionState.waiting;
 
-        // First fetch (no data or error yet): no chrome, just the logo — a
+        // First load (no data or error yet): no chrome, just the logo - a
         // continuation of the native splash so startup reads as one
-        // uninterrupted loading state. Pull-to-refresh keeps the list visible
-        // and shows its own indicator instead.
+        // uninterrupted loading state.
         if (waiting && !snapshot.hasData && !snapshot.hasError) {
           return const BrandedLoader(message: 'Loading meditations…');
         }
@@ -65,7 +62,7 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Text(
-            'Could not load meditations:\n${snapshot.error}',
+            'Could not load the meditation list:\n${snapshot.error}',
             textAlign: TextAlign.center,
           ),
         ),
@@ -87,14 +84,14 @@ class _HomeScreenState extends State<HomeScreen> {
           return ListTile(
             leading: const Icon(Icons.self_improvement),
             title: Text(track.title),
+            subtitle: track.isMultiPart
+                ? Text('${track.partCount} parts')
+                : null,
             trailing: const Icon(Icons.play_arrow),
             onTap: () {
               Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (_) => PlayerScreen(
-                    track: track,
-                    service: _service,
-                  ),
+                  builder: (_) => PlayerScreen(track: track),
                 ),
               );
             },

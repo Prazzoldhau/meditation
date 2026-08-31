@@ -1,16 +1,15 @@
-/// A single meditation audio file living in the Supabase Storage bucket.
+/// A single meditation in the list.
+///
+/// [urls] holds one or more fully-qualified, URL-encoded links to the audio
+/// files in the public Supabase Storage bucket. Most tracks are a single
+/// file; a few are split into `_part1` / `_part2` and play back-to-back as
+/// one track.
 class MeditationTrack {
-  MeditationTrack({required this.fileName});
+  const MeditationTrack({required this.title, required this.urls});
 
-  /// Raw object name/path as stored in the bucket, e.g. "01 - intro.mp3".
-  final String fileName;
+  final String title;
+  final List<String> urls;
 
-  /// Human-friendly title derived from the file name.
-  String get title {
-    final withoutExtension = fileName.replaceAll(
-      RegExp(r'\.mp3$', caseSensitive: false),
-      '',
-    );
-    return withoutExtension.replaceAll('_', ' ').trim();
-  }
+  bool get isMultiPart => urls.length > 1;
+  int get partCount => urls.length;
 }

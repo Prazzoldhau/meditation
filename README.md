@@ -1,7 +1,12 @@
 # Osho Meditation
 
-Flutter app that streams the guided-meditation MP3s from the Supabase
-Storage bucket **`es dhammo sanatano`** (project `qrdpstvibstonmwlmhbu`).
+Flutter app that streams the guided-meditation MP3s from the **public**
+Supabase Storage bucket **`es dhammo sanatano`** (project `qrdpstvibstonmwlmhbu`).
+
+Because the bucket is public, the app needs **no API key, no sign-in, no
+`--dart-define`** — it just plays each object's public URL. The track list
+lives in [`assets/tracks.json`](assets/tracks.json) (bundled with the app), so
+there's also no bucket-listing call at runtime.
 
 This project was hand-written (no local Flutter SDK). The **`android/` folder
 is committed** (same approach as the qr_scanner app) so a build only needs
@@ -9,57 +14,44 @@ is committed** (same approach as the qr_scanner app) so a build only needs
 — the iOS workflow regenerates it with `flutter create` on the build machine
 (`.metadata` tells `flutter create` this is an `app` targeting android + ios).
 
-### Wiring the build into Codemagic
+## Wiring the build into Codemagic
 
 **Android** — either mode works out of the box:
 
 - **`codemagic.yaml` mode**: nothing to do, the `android-workflow` runs
   `pub get` → `dart run flutter_launcher_icons` → `flutter build apk`.
 - **Codemagic UI (Workflow Editor) mode**: set **Workflow → Build →
-  "Pre-build script"** to exactly:
-
-  ```
-  bash scripts/codemagic_pre_build.sh
-  ```
-
-  (Remove any older content — earlier drafts referenced
-  `flutter_native_splash`, which is no longer a dependency and would fail
-  with "package not found".)
+  "Pre-build script"** to exactly `bash scripts/codemagic_pre_build.sh`
+  (or just clear it — the committed `android/` folder is enough). No
+  `--dart-define` build args are needed any more.
 
 **iOS**: needs code signing configured in Codemagic first; the `ios-workflow`
 in `codemagic.yaml` regenerates `ios/` via `scripts/codemagic_pre_build.sh`.
 
 ## How it works
 
-- `lib/services/meditation_service.dart` lists every `.mp3` object in the
-  bucket via the Supabase Storage API, then creates a short-lived **signed
-  URL** per track to actually stream it (works whether the bucket is public
-  or private).
-- No database table is required for the MVP — the file list *is* the track
-  list, titled from the filename. If you later want richer metadata
-  (categories, descriptions, artwork, ordering), add a Postgres table and
-  swap `fetchTracks()` to query it instead.
-- Supabase credentials are never hardcoded. They're read at build time via
-  `String.fromEnvironment` in `lib/app_config.dart`, passed in with
-  `--dart-define`.
+- [`assets/tracks.json`](assets/tracks.json) holds `baseUrl` +  a list of
+  tracks. Each track's `files` array is one or more object names; a track with
+  two files (e.g. `… 61_part1.mp3` + `… 61_part2.mp3`) plays them back-to-back
+  as one meditation.
+- `lib/services/meditation_service.dart` loads that JSON and builds the
+  URL-encoded public links (`<baseUrl>/<Uri.encodeComponent(file)>`).
+- `lib/screens/player_screen.dart` plays a track with `just_audio` — a single
+  `AudioSource.uri` for one file, a `ConcatenatingAudioSource` for multi-part,
+  with a "Part n of m" indicator and skip buttons.
 
-## One-time setup
+### Adding / removing meditations
 
-1. **Get your Supabase anon key**: Dashboard → this project → Project
-   Settings → API → `anon` `public` key. (Use the anon key, not
-   `service_role` — this key ships inside the compiled app.)
-2. **Push this folder to a git repo** (GitHub/GitLab/Bitbucket) — Codemagic
-   builds from a connected repo.
-3. **In Codemagic**: add the app, then under Team settings → Environment
-   variables, create a group named `supabase` containing:
-   - `SUPABASE_URL` = `https://qrdpstvibstonmwlmhbu.supabase.co`
-   - `SUPABASE_ANON_KEY` = your anon key (mark it "Secure")
-4. Make sure the bucket's Storage RLS policies allow `SELECT` for the
-   `anon` role (or whatever role your users authenticate as) — otherwise
-   `fetchTracks()`/`createSignedUrl()` will fail with a permission error.
-5. Run the **android-workflow** to get an APK. The **ios-workflow** additionally
-   needs iOS code signing configured in Codemagic (App Store Connect
-   integration) before it will succeed — skip it until you're ready for iOS.
+Edit `assets/tracks.json` and rebuild. Example entries:
+
+```json
+{ "title": "Es Dhammo Sanantano 42", "files": ["Es Dhammo Sanantano 42.MP3"] },
+{ "title": "Es Dhammo Sanantano 61", "files": ["Es Dhammo Sanantano 61_part1.mp3", "Es Dhammo Sanantano 61_part2.mp3"] }
+```
+
+`files` are the raw object names in the bucket (spaces and all) — the app
+URL-encodes them. If you ever make the bucket private, this approach stops
+working and you'd need to add `supabase_flutter` back for signed URLs.
 
 ## Local development (once you have Flutter installed somewhere)
 
@@ -67,9 +59,7 @@ in `codemagic.yaml` regenerates `ios/` via `scripts/codemagic_pre_build.sh`.
 # android/ is already in the repo; add ios/ only if you need it:
 # flutter create . --platforms=ios --org com.oshomeditation --project-name osho_meditation
 flutter pub get
-flutter run \
-  --dart-define=SUPABASE_URL=https://qrdpstvibstonmwlmhbu.supabase.co \
-  --dart-define=SUPABASE_ANON_KEY=your-anon-key
+flutter run
 ```
 
 ## App icon & splash screen
@@ -89,9 +79,9 @@ re-runs `dart run flutter_launcher_icons`, which just rewrites the same files.
 | `drawable*/launch_background.xml` | — | white background + `splash_logo`, centred |
 
 The native launch screen (white + logo) stays up until `runApp()` paints the
-first frame — which is after `Supabase.initialize()` — then `HomeScreen` shows
-the same logo on white (`BrandedLoader`, `assets/branding/osho_logo_transparent.png`)
-during the first track fetch. One continuous loading state, no extra package.
+first frame, then `HomeScreen` shows the same logo on white (`BrandedLoader`,
+`assets/branding/osho_logo_transparent.png`) while `tracks.json` loads. One
+continuous loading state.
 
 To change the icon/splash: replace the source PNGs in `assets/branding/`
 (keep the filenames), then regenerate the `android/` resources — run
@@ -104,7 +94,5 @@ centred exports of the logo at mdpi–xxxhdpi (150/225/300/450/600 px wide).
   `android/app/build.gradle`, the `package` in `MainActivity.kt` (and its
   folder path), `android:label` in `android/app/src/main/AndroidManifest.xml`,
   and `pubspec.yaml`'s `name:`.
-- **Bucket name**: `AppConfig.bucketName` in `lib/app_config.dart`.
-- **Signed URL lifetime**: `_signedUrlExpirySeconds` in
-  `lib/services/meditation_service.dart` (defaults to 1 hour).
+- **Track list / bucket URL**: [`assets/tracks.json`](assets/tracks.json).
 - **Icon / splash artwork**: `assets/branding/` (see above).

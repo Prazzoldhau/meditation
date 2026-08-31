@@ -1,5 +1,5 @@
 name: osho_meditation
-description: "Osho Meditation - stream guided meditation audio from Supabase Storage."
+description: "Osho Meditation - stream guided meditation audio from public Supabase Storage."
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -10,7 +10,6 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  supabase_flutter: ^2.0.0
   just_audio: ^0.9.0
   cupertino_icons: ^1.0.8
 
@@ -23,10 +22,7 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    # Loaded at runtime by the in-app loading screen (BrandedLoader). The rest
-    # of assets/branding/ is source art for the launcher icon (already baked
-    # into android/app/src/main/res/ and regenerated on CI by
-    # flutter_launcher_icons).
+    - assets/tracks.json
     - assets/branding/osho_logo_transparent.png
 
 # Launcher icon. The generated output is committed under
