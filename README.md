@@ -9,6 +9,12 @@ committed — `codemagic.yaml` runs `flutter create .` on the build machine to
 generate them fresh before every build. That's normal for this setup, not a
 missing piece.
 
+`.metadata` **is** committed even though the platform folders aren't: it's the
+file `flutter create` reads to know this is an `app` project targeting
+`android` + `ios`, so the recreate run actually regenerates those folders
+(without it, `flutter create .` only touches root files and the native
+folders never appear).
+
 ## How it works
 
 - `lib/services/meditation_service.dart` lists every `.mp3` object in the

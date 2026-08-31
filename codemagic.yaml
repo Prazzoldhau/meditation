@@ -12,13 +12,18 @@ workflows:
     scripts:
       - name: Generate native android/ project (not kept in git)
         script: |
-          if [ ! -d "android" ]; then
-            flutter create . --platforms=android --org com.oshomeditation --project-name osho_meditation
-          fi
+          set -ex
+          flutter create \
+            --org com.oshomeditation \
+            --project-name osho_meditation \
+            --platforms=android \
+            .
+          test -d android || { echo "flutter create did not produce android/"; exit 1; }
       - name: Get Flutter packages
         script: flutter pub get
       - name: Generate launcher icon and splash screen
         script: |
+          set -ex
           dart run flutter_native_splash:create
           dart run flutter_launcher_icons
       - name: Build APK
@@ -53,13 +58,18 @@ workflows:
     scripts:
       - name: Generate native ios/ project (not kept in git)
         script: |
-          if [ ! -d "ios" ]; then
-            flutter create . --platforms=ios --org com.oshomeditation --project-name osho_meditation
-          fi
+          set -ex
+          flutter create \
+            --org com.oshomeditation \
+            --project-name osho_meditation \
+            --platforms=ios \
+            .
+          test -d ios || { echo "flutter create did not produce ios/"; exit 1; }
       - name: Get Flutter packages
         script: flutter pub get
       - name: Generate launcher icon and splash screen
         script: |
+          set -ex
           dart run flutter_native_splash:create
           dart run flutter_launcher_icons
       - name: Set up code signing
