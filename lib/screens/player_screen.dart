@@ -143,7 +143,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 return Column(
                   children: [
                     SizedBox(
-                      height: 40,
+                      height: 48,
                       child: Stack(
                         alignment: Alignment.center,
                         children: [
@@ -178,8 +178,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
                               min: 0,
                               max: sliderMax,
                               value: posMs,
-                              materialTapTargetSize:
-                                  MaterialTapTargetSize.shrinkWrap,
                               onChanged: ready
                                   ? (v) => _player
                                       .seek(Duration(milliseconds: v.round()))
