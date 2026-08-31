@@ -1,30 +1,27 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app_config.dart';
 import 'screens/home_screen.dart';
 
 Future<void> main() async {
-  final binding = WidgetsFlutterBinding.ensureInitialized();
-  // Hold the native splash (logo screen) on screen through app startup so
-  // there's no blank flash while the engine and Supabase warm up.
-  FlutterNativeSplash.preserve(widgetsBinding: binding);
+  WidgetsFlutterBinding.ensureInitialized();
 
+  // The native launch screen (white + OSHO logo, see
+  // android/app/src/main/res/drawable/launch_background.xml) stays up on its
+  // own until runApp() paints the first frame below — which is after
+  // Supabase.initialize() finishes. HomeScreen then shows the same logo on
+  // white (BrandedLoader) during the first fetch, so it reads as one
+  // continuous loading state.
   if (!AppConfig.isConfigured) {
-    FlutterNativeSplash.remove();
     runApp(const _MissingConfigApp());
     return;
   }
 
-  try {
-    await Supabase.initialize(
-      url: AppConfig.supabaseUrl,
-      anonKey: AppConfig.supabaseAnonKey,
-    );
-  } finally {
-    FlutterNativeSplash.remove();
-  }
+  await Supabase.initialize(
+    url: AppConfig.supabaseUrl,
+    anonKey: AppConfig.supabaseAnonKey,
+  );
 
   runApp(const OshoMeditationApp());
 }

@@ -3,33 +3,31 @@
 Flutter app that streams the guided-meditation MP3s from the Supabase
 Storage bucket **`es dhammo sanatano`** (project `qrdpstvibstonmwlmhbu`).
 
-This project was hand-written (no local Flutter SDK) so it can be built
-entirely on Codemagic. The `android/` and `ios/` native folders are **not**
-committed — they're regenerated fresh on the build machine by
-[`scripts/codemagic_pre_build.sh`](scripts/codemagic_pre_build.sh), which runs
-`flutter create .` and then the launcher-icon / splash generators. That's
-normal for this setup, not a missing piece.
+This project was hand-written (no local Flutter SDK). The **`android/` folder
+is committed** (same approach as the qr_scanner app) so a build only needs
+`flutter pub get` → `flutter build apk`. The **`ios/` folder is not** committed
+— the iOS workflow regenerates it with `flutter create` on the build machine
+(`.metadata` tells `flutter create` this is an `app` targeting android + ios).
 
-`.metadata` **is** committed even though the platform folders aren't: it's the
-file `flutter create` reads to know this is an `app` project targeting
-`android` + `ios`, so the recreate run actually regenerates those folders
-(without it, `flutter create .` only touches root files and the native
-folders never appear).
+### Wiring the build into Codemagic
 
-### Wiring the pre-build step into Codemagic
+**Android** — either mode works out of the box:
 
-- **If the workflow uses `codemagic.yaml`** (repo root): already done — its
-  `scripts:` call `scripts/codemagic_pre_build.sh`.
-- **If the workflow is configured in the Codemagic UI** (Workflow Editor):
-  open **Workflow → Build → "Pre-build script"** and paste:
+- **`codemagic.yaml` mode**: nothing to do, the `android-workflow` runs
+  `pub get` → `dart run flutter_launcher_icons` → `flutter build apk`.
+- **Codemagic UI (Workflow Editor) mode**: set **Workflow → Build →
+  "Pre-build script"** to exactly:
 
   ```
   bash scripts/codemagic_pre_build.sh
   ```
 
-  Without this, the build fails at the icon/splash step with
-  `The "android" directory does not exist` — because nothing has run
-  `flutter create` yet.
+  (Remove any older content — earlier drafts referenced
+  `flutter_native_splash`, which is no longer a dependency and would fail
+  with "package not found".)
+
+**iOS**: needs code signing configured in Codemagic first; the `ios-workflow`
+in `codemagic.yaml` regenerates `ios/` via `scripts/codemagic_pre_build.sh`.
 
 ## How it works
 
@@ -66,7 +64,8 @@ folders never appear).
 ## Local development (once you have Flutter installed somewhere)
 
 ```
-flutter create . --platforms=android,ios --org com.oshomeditation --project-name osho_meditation
+# android/ is already in the repo; add ios/ only if you need it:
+# flutter create . --platforms=ios --org com.oshomeditation --project-name osho_meditation
 flutter pub get
 flutter run \
   --dart-define=SUPABASE_URL=https://qrdpstvibstonmwlmhbu.supabase.co \
@@ -75,43 +74,36 @@ flutter run \
 
 ## App icon & splash screen
 
-The OSHO logo (`assets/branding/`) drives both the launcher icon and the
-startup splash. Because the native `android/` and `ios/` folders aren't in
-git, the icon and splash resources can't be pre-generated — instead
-[`scripts/codemagic_pre_build.sh`](scripts/codemagic_pre_build.sh) runs the
-generators on the build machine, right after `flutter create .` and
-`flutter pub get`:
+The OSHO logo drives the launcher icon and the startup splash. Both are
+**baked into the committed `android/` folder** (generated from
+`assets/branding/` with Pillow), so they work with no build-time step. CI also
+re-runs `dart run flutter_launcher_icons`, which just rewrites the same files.
 
-```
-dart run flutter_native_splash:create
-dart run flutter_launcher_icons
-```
+| Android resource | Source art | Role |
+| --- | --- | --- |
+| `mipmap-*/ic_launcher.png` | `osho_logo.png` | legacy square icon (pre-API 26) |
+| `mipmap-*/ic_launcher_foreground.png` | `icon_foreground.png` | adaptive icon **foreground** (padded logo) |
+| `mipmap-*/ic_launcher_background.png` | `icon_background.png` | adaptive icon **background** (faded logo watermark) |
+| `mipmap-anydpi-v26/ic_launcher.xml` | — | ties the two adaptive layers together |
+| `drawable-*/splash_logo.png` | `osho_logo_transparent.png` | centred logo on the native launch screen |
+| `drawable*/launch_background.xml` | — | white background + `splash_logo`, centred |
 
-Config lives in `pubspec.yaml` under `flutter_launcher_icons:` and
-`flutter_native_splash:`. Source artwork:
+The native launch screen (white + logo) stays up until `runApp()` paints the
+first frame — which is after `Supabase.initialize()` — then `HomeScreen` shows
+the same logo on white (`BrandedLoader`, `assets/branding/osho_logo_transparent.png`)
+during the first track fetch. One continuous loading state, no extra package.
 
-| File | Used as |
-| --- | --- |
-| `osho_logo.png` | iOS icon + legacy Android icon |
-| `icon_foreground.png` | adaptive-icon **foreground** + Android 12 splash icon |
-| `icon_background.png` | adaptive-icon **background** (faded logo watermark) |
-| `splash.png` | splash **foreground** (centred logo) |
-| `splash_background.png` | splash **background** (faded full-bleed logo) |
-| `osho_logo_transparent.png` | in-app loading screen (`BrandedLoader`) |
-
-`main.dart` calls `FlutterNativeSplash.preserve` / `remove` so the splash
-stays up until `Supabase.initialize()` finishes, then `HomeScreen` shows the
-same logo (`BrandedLoader`) during the first track fetch — one continuous
-loading state from cold start to content.
-
-To regenerate the artwork from a new source image, edit
-`assets/branding/*.png` (keep the same filenames and roughly the same
-padding) and rebuild.
+To change the icon/splash: replace the source PNGs in `assets/branding/`
+(keep the filenames), then regenerate the `android/` resources — run
+`dart run flutter_launcher_icons` for the icon; the splash PNGs are plain
+centred exports of the logo at mdpi–xxxhdpi (150/225/300/450/600 px wide).
 
 ## Customizing
 
-- **App/package name**: change `--org`/`--project-name` in `codemagic.yaml`
-  and `pubspec.yaml`'s `name:` together.
+- **App/package name**: `applicationId` + `namespace` in
+  `android/app/build.gradle`, the `package` in `MainActivity.kt` (and its
+  folder path), `android:label` in `android/app/src/main/AndroidManifest.xml`,
+  and `pubspec.yaml`'s `name:`.
 - **Bucket name**: `AppConfig.bucketName` in `lib/app_config.dart`.
 - **Signed URL lifetime**: `_signedUrlExpirySeconds` in
   `lib/services/meditation_service.dart` (defaults to 1 hour).

@@ -1,8 +1,23 @@
-# Shell scripts must stay LF or they won't run on the Linux/macOS build machine.
-*.sh text eol=lf
-
-# Keep YAML/Dart/config LF too for consistent diffs across Windows and CI.
-*.yaml text eol=lf
-*.yml text eol=lf
-*.dart text eol=lf
+# Keep text files LF everywhere so the Linux/macOS build machine is happy.
+# Shell scripts in particular MUST be LF or they won't run.
+*.sh    text eol=lf
+*.yaml  text eol=lf
+*.yml   text eol=lf
+*.dart  text eol=lf
+*.gradle text eol=lf
+*.kt    text eol=lf
+*.xml   text eol=lf
+*.properties text eol=lf
+*.json  text eol=lf
 .metadata text eol=lf
+.gitignore text eol=lf
+.gitattributes text eol=lf
+
+# Binary assets - never touch line endings.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.ttf binary
+*.otf binary
+*.jar binary

@@ -7,11 +7,26 @@
 .pub/
 build/
 *.g.dart
+flutter_*.png
+linked_*.ds
+unlinked.ds
+unlinked_spec.ds
 
-# Native platform folders are regenerated on Codemagic by codemagic.yaml
-# (see "Generate missing platform folders" script). Keeping them out of git
-# avoids committing machine-generated Xcode/Gradle project files.
-/android/
+# Android — the android/ folder IS committed (like the qr_scanner app), but
+# these bits are machine-generated / local-only and must stay out of git.
+android/.gradle/
+android/captures/
+android/gradlew
+android/gradlew.bat
+android/gradle/wrapper/gradle-wrapper.jar
+android/local.properties
+android/**/GeneratedPluginRegistrant.java
+android/key.properties
+*.jks
+*.keystore
+
+# iOS / other native folders are still regenerated on the build machine
+# (see scripts/codemagic_pre_build.sh) and are not committed.
 /ios/
 /macos/
 /windows/
@@ -22,6 +37,10 @@ build/
 .idea/
 .vscode/
 *.iml
+*.swp
+
+# macOS
+.DS_Store
 
 # Local secrets (never commit real Supabase keys)
 .env

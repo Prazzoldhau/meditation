@@ -3,9 +3,9 @@
 #
 # This file should be version controlled and should not be manually edited.
 #
-# It is committed on purpose even though the android/ and ios/ folders are not:
-# `flutter create .` on the Codemagic build machine reads the platform list
-# below to know which native folders to regenerate before every build.
+# android/ is committed; ios/ is not. This file lets `flutter create
+# --platforms=ios .` on the Codemagic build machine know the project is an
+# `app` targeting android + ios, so it regenerates ios/ correctly.
 
 version:
   revision: "dec2ee5c1f98346f2364a8b4cca82ac2bee74838"
