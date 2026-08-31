@@ -13,11 +13,51 @@ dependencies:
   supabase_flutter: ^2.0.0
   just_audio: ^0.9.0
   cupertino_icons: ^1.0.8
+  flutter_native_splash: ^2.4.1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
+  flutter_launcher_icons: ^0.14.1
 
 flutter:
   uses-material-design: true
+  assets:
+    # Only this one is loaded at runtime (the in-app loading screen). The other
+    # files in assets/branding/ are build-time inputs for the icon / splash
+    # generators and don't need to ship inside the app bundle.
+    - assets/branding/osho_logo_transparent.png
+
+# App launcher icon. Generated on the build machine (see codemagic.yaml) with
+#   dart run flutter_launcher_icons
+# after `flutter create .` has produced the native android/ and ios/ folders.
+# The same artwork is used for the adaptive-icon foreground and background
+# layers (background = an oversized, faded watermark of the logo).
+flutter_launcher_icons:
+  image_path: "assets/branding/osho_logo.png"
+  android: true
+  ios: true
+  remove_alpha_ios: true
+  background_color_ios: "#ffffff"
+  min_sdk_android: 21
+  adaptive_icon_foreground: "assets/branding/icon_foreground.png"
+  adaptive_icon_background: "assets/branding/icon_background.png"
+
+# Native splash / "buffering" screen shown from cold start until the Flutter
+# engine + Supabase.initialize() are ready (main.dart keeps it alive).
+# Generated on the build machine with
+#   dart run flutter_native_splash:create
+# The logo is the centred foreground; a faded full-bleed watermark of the same
+# logo is the background.
+flutter_native_splash:
+  color: "#ffffff"
+  image: assets/branding/splash.png
+  background_image: assets/branding/splash_background.png
+  fullscreen: true
+  android: true
+  ios: true
+  web: false
+  android_12:
+    image: assets/branding/icon_foreground.png
+    color: "#ffffff"

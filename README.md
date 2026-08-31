@@ -51,6 +51,40 @@ flutter run \
   --dart-define=SUPABASE_ANON_KEY=your-anon-key
 ```
 
+## App icon & splash screen
+
+The OSHO logo (`assets/branding/`) drives both the launcher icon and the
+startup splash. Because the native `android/` and `ios/` folders aren't in
+git, the icon and splash resources can't be pre-generated — instead
+`codemagic.yaml` runs the generators on the build machine, right after
+`flutter create .` and `flutter pub get`:
+
+```
+dart run flutter_native_splash:create
+dart run flutter_launcher_icons
+```
+
+Config lives in `pubspec.yaml` under `flutter_launcher_icons:` and
+`flutter_native_splash:`. Source artwork:
+
+| File | Used as |
+| --- | --- |
+| `osho_logo.png` | iOS icon + legacy Android icon |
+| `icon_foreground.png` | adaptive-icon **foreground** + Android 12 splash icon |
+| `icon_background.png` | adaptive-icon **background** (faded logo watermark) |
+| `splash.png` | splash **foreground** (centred logo) |
+| `splash_background.png` | splash **background** (faded full-bleed logo) |
+| `osho_logo_transparent.png` | in-app loading screen (`BrandedLoader`) |
+
+`main.dart` calls `FlutterNativeSplash.preserve` / `remove` so the splash
+stays up until `Supabase.initialize()` finishes, then `HomeScreen` shows the
+same logo (`BrandedLoader`) during the first track fetch — one continuous
+loading state from cold start to content.
+
+To regenerate the artwork from a new source image, edit
+`assets/branding/*.png` (keep the same filenames and roughly the same
+padding) and rebuild.
+
 ## Customizing
 
 - **App/package name**: change `--org`/`--project-name` in `codemagic.yaml`
@@ -58,3 +92,4 @@ flutter run \
 - **Bucket name**: `AppConfig.bucketName` in `lib/app_config.dart`.
 - **Signed URL lifetime**: `_signedUrlExpirySeconds` in
   `lib/services/meditation_service.dart` (defaults to 1 hour).
+- **Icon / splash artwork**: `assets/branding/` (see above).

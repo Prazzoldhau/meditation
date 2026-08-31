@@ -1,21 +1,30 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app_config.dart';
 import 'screens/home_screen.dart';
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  final binding = WidgetsFlutterBinding.ensureInitialized();
+  // Hold the native splash (logo screen) on screen through app startup so
+  // there's no blank flash while the engine and Supabase warm up.
+  FlutterNativeSplash.preserve(widgetsBinding: binding);
 
   if (!AppConfig.isConfigured) {
+    FlutterNativeSplash.remove();
     runApp(const _MissingConfigApp());
     return;
   }
 
-  await Supabase.initialize(
-    url: AppConfig.supabaseUrl,
-    anonKey: AppConfig.supabaseAnonKey,
-  );
+  try {
+    await Supabase.initialize(
+      url: AppConfig.supabaseUrl,
+      anonKey: AppConfig.supabaseAnonKey,
+    );
+  } finally {
+    FlutterNativeSplash.remove();
+  }
 
   runApp(const OshoMeditationApp());
 }

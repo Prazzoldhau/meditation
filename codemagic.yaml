@@ -17,6 +17,10 @@ workflows:
           fi
       - name: Get Flutter packages
         script: flutter pub get
+      - name: Generate launcher icon and splash screen
+        script: |
+          dart run flutter_native_splash:create
+          dart run flutter_launcher_icons
       - name: Build APK
         script: |
           flutter build apk --release \
@@ -54,6 +58,10 @@ workflows:
           fi
       - name: Get Flutter packages
         script: flutter pub get
+      - name: Generate launcher icon and splash screen
+        script: |
+          dart run flutter_native_splash:create
+          dart run flutter_launcher_icons
       - name: Set up code signing
         script: xcode-project use-profiles
       - name: Build IPA
