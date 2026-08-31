@@ -1,0 +1,8 @@
+# Shell scripts must stay LF or they won't run on the Linux/macOS build machine.
+*.sh text eol=lf
+
+# Keep YAML/Dart/config LF too for consistent diffs across Windows and CI.
+*.yaml text eol=lf
+*.yml text eol=lf
+*.dart text eol=lf
+.metadata text eol=lf

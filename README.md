@@ -5,15 +5,31 @@ Storage bucket **`es dhammo sanatano`** (project `qrdpstvibstonmwlmhbu`).
 
 This project was hand-written (no local Flutter SDK) so it can be built
 entirely on Codemagic. The `android/` and `ios/` native folders are **not**
-committed — `codemagic.yaml` runs `flutter create .` on the build machine to
-generate them fresh before every build. That's normal for this setup, not a
-missing piece.
+committed — they're regenerated fresh on the build machine by
+[`scripts/codemagic_pre_build.sh`](scripts/codemagic_pre_build.sh), which runs
+`flutter create .` and then the launcher-icon / splash generators. That's
+normal for this setup, not a missing piece.
 
 `.metadata` **is** committed even though the platform folders aren't: it's the
 file `flutter create` reads to know this is an `app` project targeting
 `android` + `ios`, so the recreate run actually regenerates those folders
 (without it, `flutter create .` only touches root files and the native
 folders never appear).
+
+### Wiring the pre-build step into Codemagic
+
+- **If the workflow uses `codemagic.yaml`** (repo root): already done — its
+  `scripts:` call `scripts/codemagic_pre_build.sh`.
+- **If the workflow is configured in the Codemagic UI** (Workflow Editor):
+  open **Workflow → Build → "Pre-build script"** and paste:
+
+  ```
+  bash scripts/codemagic_pre_build.sh
+  ```
+
+  Without this, the build fails at the icon/splash step with
+  `The "android" directory does not exist` — because nothing has run
+  `flutter create` yet.
 
 ## How it works
 
@@ -62,8 +78,9 @@ flutter run \
 The OSHO logo (`assets/branding/`) drives both the launcher icon and the
 startup splash. Because the native `android/` and `ios/` folders aren't in
 git, the icon and splash resources can't be pre-generated — instead
-`codemagic.yaml` runs the generators on the build machine, right after
-`flutter create .` and `flutter pub get`:
+[`scripts/codemagic_pre_build.sh`](scripts/codemagic_pre_build.sh) runs the
+generators on the build machine, right after `flutter create .` and
+`flutter pub get`:
 
 ```
 dart run flutter_native_splash:create

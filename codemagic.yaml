@@ -10,22 +10,10 @@ workflows:
         # with SUPABASE_URL and SUPABASE_ANON_KEY (mark them "Secure").
         - supabase
     scripts:
-      - name: Generate native android/ project (not kept in git)
-        script: |
-          set -ex
-          flutter create \
-            --org com.oshomeditation \
-            --project-name osho_meditation \
-            --platforms=android \
-            .
-          test -d android || { echo "flutter create did not produce android/"; exit 1; }
-      - name: Get Flutter packages
-        script: flutter pub get
-      - name: Generate launcher icon and splash screen
-        script: |
-          set -ex
-          dart run flutter_native_splash:create
-          dart run flutter_launcher_icons
+      # Regenerate android/ (not in git), then icons + splash. Same script the
+      # Codemagic UI "Pre-build script" field runs.
+      - name: Generate native project, launcher icon, splash
+        script: PLATFORMS=android bash scripts/codemagic_pre_build.sh
       - name: Build APK
         script: |
           flutter build apk --release \
@@ -56,22 +44,10 @@ workflows:
         distribution_type: app_store
         bundle_identifier: com.oshomeditation.oshoMeditation
     scripts:
-      - name: Generate native ios/ project (not kept in git)
-        script: |
-          set -ex
-          flutter create \
-            --org com.oshomeditation \
-            --project-name osho_meditation \
-            --platforms=ios \
-            .
-          test -d ios || { echo "flutter create did not produce ios/"; exit 1; }
-      - name: Get Flutter packages
-        script: flutter pub get
-      - name: Generate launcher icon and splash screen
-        script: |
-          set -ex
-          dart run flutter_native_splash:create
-          dart run flutter_launcher_icons
+      # Regenerate ios/ (not in git), then icons + splash. Same script the
+      # Codemagic UI "Pre-build script" field runs.
+      - name: Generate native project, launcher icon, splash
+        script: PLATFORMS=ios bash scripts/codemagic_pre_build.sh
       - name: Set up code signing
         script: xcode-project use-profiles
       - name: Build IPA
