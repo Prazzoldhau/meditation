@@ -16,192 +16,105 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   static const _service = MeditationService();
 
-  final _tracks = <MeditationTrack>[];
-  final _scroll = ScrollController();
-
-  int _offset = 0;
-  bool _loading = false;
-  bool _hasMore = true;
+  late Future<List<MeditationTrack>> _future;
   bool _bundledFallback = false;
-  bool _firstLoadDone = false;
-  Object? _error;
 
   @override
   void initState() {
     super.initState();
-    _scroll.addListener(_onScroll);
-    _loadMore();
+    _future = _load();
   }
 
-  @override
-  void dispose() {
-    _scroll.dispose();
-    super.dispose();
-  }
-
-  void _onScroll() {
-    if (!_scroll.hasClients) return;
-    final nearBottom =
-        _scroll.position.pixels >= _scroll.position.maxScrollExtent - 500;
-    if (nearBottom) _loadMore();
-  }
-
-  Future<void> _loadMore() async {
-    if (_loading || !_hasMore) return;
-    _loading = true;
-    _error = null;
-    // Show the footer spinner. The first call comes straight from initState
-    // (tracks empty) - the imminent first build already reflects _loading, so
-    // no setState is wanted yet.
-    if (_firstLoadDone) setState(() {});
-
-    try {
-      final List<MeditationTrack> fetched;
-      var hasMore = false;
-      var nextOffset = _offset;
-
-      if (SupabaseConfig.canBrowse && !_bundledFallback) {
-        final page = await _service.fetchPage(offset: _offset);
-        fetched = page.tracks;
-        hasMore = page.hasMore;
-        nextOffset = page.nextOffset;
-      } else {
-        _bundledFallback = true;
-        fetched = await _service.fetchBundled();
+  Future<List<MeditationTrack>> _load() async {
+    if (SupabaseConfig.canBrowse) {
+      try {
+        final live = await _service.fetchAll();
+        if (live.isNotEmpty) {
+          _bundledFallback = false;
+          return live;
+        }
+        // Empty usually means the `anon` SELECT policy is missing.
+      } catch (_) {
+        // fall through to the bundled snapshot
       }
-
-      // Live list returned nothing on the first page - almost always a missing
-      // Storage SELECT policy for `anon`. Fall back to the bundled snapshot.
-      if (fetched.isEmpty && _tracks.isEmpty && !_bundledFallback) {
-        _bundledFallback = true;
-        final bundled = await _service.fetchBundled();
-        if (!mounted) return;
-        setState(() {
-          _tracks
-            ..clear()
-            ..addAll(bundled);
-          _hasMore = false;
-          _loading = false;
-          _firstLoadDone = true;
-        });
-        return;
-      }
-
-      if (!mounted) return;
-      setState(() {
-        if (_bundledFallback) _tracks.clear();
-        _tracks.addAll(fetched);
-        _offset = nextOffset;
-        _hasMore = hasMore;
-        _loading = false;
-        _firstLoadDone = true;
-      });
-    } catch (e) {
-      // Live browse failed - fall back to the bundled snapshot once.
-      if (_tracks.isEmpty && !_bundledFallback) {
-        try {
-          final bundled = await _service.fetchBundled();
-          if (!mounted) return;
-          setState(() {
-            _tracks
-              ..clear()
-              ..addAll(bundled);
-            _bundledFallback = true;
-            _hasMore = false;
-            _loading = false;
-            _firstLoadDone = true;
-          });
-          return;
-        } catch (_) {/* show the original error below */}
-      }
-      if (!mounted) return;
-      setState(() {
-        _error = e;
-        _loading = false;
-        _firstLoadDone = true;
-      });
     }
+    _bundledFallback = true;
+    return _service.fetchBundled();
   }
 
   Future<void> _refresh() async {
-    // Fetch a fresh first page without tearing down the current list; swap on
-    // success so pull-to-refresh doesn't flash an empty screen.
-    try {
-      final List<MeditationTrack> fresh;
-      var hasMore = false;
-      var nextOffset = 0;
-      final useBundled = !SupabaseConfig.canBrowse || _bundledFallback;
-
-      if (useBundled) {
-        fresh = await _service.fetchBundled();
-      } else {
-        final page = await _service.fetchPage(offset: 0);
-        fresh = page.tracks;
-        hasMore = page.hasMore;
-        nextOffset = page.nextOffset;
-      }
-
-      if (!mounted) return;
-      setState(() {
-        _tracks
-          ..clear()
-          ..addAll(fresh);
-        _offset = nextOffset;
-        _hasMore = hasMore;
-        _bundledFallback = useBundled;
-        _error = null;
-      });
-    } catch (e) {
-      if (mounted) setState(() => _error = e);
-    }
+    final next = _load();
+    setState(() => _future = next);
+    await next;
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_tracks.isEmpty && _loading) {
-      return const BrandedLoader(message: 'Loading meditations…');
-    }
+    return FutureBuilder<List<MeditationTrack>>(
+      future: _future,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
+          return const BrandedLoader(message: 'Loading meditations…');
+        }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Osho Meditation'),
-        bottom: _bundledFallback
-            ? PreferredSize(
-                preferredSize: const Size.fromHeight(22),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Text(
-                    'Offline list',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.labelSmall,
-                  ),
-                ),
-              )
-            : null,
-      ),
-      body: _body(context),
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('Osho Meditation'),
+            bottom: _bundledFallback
+                ? const PreferredSize(
+                    preferredSize: Size.fromHeight(20),
+                    child: Padding(
+                      padding: EdgeInsets.only(bottom: 5),
+                      child: Text(
+                        'Offline list',
+                        style: TextStyle(fontSize: 11),
+                      ),
+                    ),
+                  )
+                : null,
+          ),
+          body: _body(context, snapshot),
+        );
+      },
     );
   }
 
-  Widget _body(BuildContext context) {
-    if (_tracks.isEmpty && _error != null) {
-      return _ErrorView(error: _error!, onRetry: _loadMore);
+  Widget _body(
+    BuildContext context,
+    AsyncSnapshot<List<MeditationTrack>> snapshot,
+  ) {
+    if (snapshot.hasError) {
+      return _ErrorView(
+        error: snapshot.error!,
+        onRetry: () => setState(() => _future = _load()),
+      );
     }
-    if (_tracks.isEmpty) {
+
+    final tracks = snapshot.data ?? const <MeditationTrack>[];
+    if (tracks.isEmpty) {
       return const Center(child: Text('No meditations found yet.'));
     }
 
     return RefreshIndicator(
       onRefresh: _refresh,
       child: ListView.separated(
-        controller: _scroll,
         physics: const AlwaysScrollableScrollPhysics(),
-        itemCount: _tracks.length + 1,
+        itemCount: tracks.length + 1,
         separatorBuilder: (_, __) => const Divider(height: 1),
         itemBuilder: (context, index) {
-          if (index == _tracks.length) return _footer(context);
-          final track = _tracks[index];
+          if (index == tracks.length) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 18),
+              child: Center(
+                child: Text(
+                  '${tracks.length} meditations',
+                  style: Theme.of(context).textTheme.labelMedium,
+                ),
+              ),
+            );
+          }
+          final track = tracks[index];
           return ListTile(
             leading: const Icon(Icons.self_improvement),
             title: Text(track.title),
@@ -213,44 +126,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           );
         },
-      ),
-    );
-  }
-
-  Widget _footer(BuildContext context) {
-    if (_error != null) {
-      return Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Text(
-              'Could not load more.',
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
-            ),
-            TextButton(onPressed: _loadMore, child: const Text('Try again')),
-          ],
-        ),
-      );
-    }
-    if (_hasMore) {
-      return const Padding(
-        padding: EdgeInsets.all(20),
-        child: Center(
-          child: SizedBox(
-            width: 22,
-            height: 22,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-        ),
-      );
-    }
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 20),
-      child: Center(
-        child: Text(
-          '${_tracks.length} meditations',
-          style: Theme.of(context).textTheme.labelMedium,
-        ),
       ),
     );
   }
@@ -275,10 +150,7 @@ class _ErrorView extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 12),
-            FilledButton.tonal(
-              onPressed: onRetry,
-              child: const Text('Retry'),
-            ),
+            FilledButton.tonal(onPressed: onRetry, child: const Text('Retry')),
           ],
         ),
       ),

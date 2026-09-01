@@ -30,15 +30,18 @@ in `codemagic.yaml` regenerates `ios/` via `scripts/codemagic_pre_build.sh`.
 
 ## How it works
 
-### Track list — live browse, with an offline fallback
+### Track list — live from the bucket, with an offline fallback
 
-- **Live browse** (preferred): `MeditationService.fetchPage()` pages through
-  the real bucket via the Storage `list` API, 40 objects at a time, as you
-  scroll (Facebook/TikTok-style). Each object is one row, titled by its real
-  filename. This needs `SupabaseConfig.anonKey` set (paste it into
-  `lib/supabase_config.dart`, or pass `--dart-define=SUPABASE_ANON_KEY=…`) —
-  the anon key is a *public* key, safe to ship; RLS protects the data. It also
-  needs a Storage policy letting `anon` run `SELECT` on the bucket:
+- **Live** (preferred): `MeditationService.fetchAll()` pages through the
+  Storage `list` API (100 at a time), collects the object names, sorts them
+  numerically and merges `_part1` / `_part2` files into one track. So adding
+  or removing files in the bucket just shows up in the app — no code change.
+  The list renders lazily (`ListView.builder`); only ~128 filename records are
+  fetched, never any audio up front.
+
+  Needs `SupabaseConfig.anonKey` (committed in `lib/supabase_config.dart`, or
+  `--dart-define=SUPABASE_ANON_KEY=…`) — a *public* key, safe to ship — **and**
+  a Storage policy letting `anon` run `SELECT`:
 
   ```sql
   create policy "anon can list es dhammo sanatano"
@@ -46,10 +49,9 @@ in `codemagic.yaml` regenerates `ios/` via `scripts/codemagic_pre_build.sh`.
   using ( bucket_id = 'es dhammo sanatano' );
   ```
 
-- **Offline fallback**: with no key, or if the list call fails, the app loads
-  the bundled [`assets/tracks.json`](assets/tracks.json) snapshot (all 121
-  tracks at once) and shows an "Offline list" badge. `tracks.json` also groups
-  `_part1` / `_part2` files into one track that plays back-to-back.
+- **Offline fallback**: with no key, an empty result (missing policy) or any
+  failure, the app loads the bundled [`assets/tracks.json`](assets/tracks.json)
+  snapshot and shows an "Offline list" badge.
 
 - `lib/services/meditation_service.dart` builds the URL-encoded public links
   (`<baseUrl>/<Uri.encodeComponent(file)>`) for both paths.

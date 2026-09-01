@@ -6,84 +6,68 @@ import 'package:http/http.dart' as http;
 import '../models/meditation_track.dart';
 import '../supabase_config.dart';
 
-/// One page of browsed tracks plus the cursor for the next page.
-class TrackPage {
-  const TrackPage({
-    required this.tracks,
-    required this.nextOffset,
-    required this.hasMore,
-  });
-
-  final List<MeditationTrack> tracks;
-  final int nextOffset;
-  final bool hasMore;
-}
-
 /// Loads the meditation list.
 ///
-/// Primary path: page through the live bucket via the Storage `list` API
-/// (needs [SupabaseConfig.anonKey]). Fallback: the bundled `assets/tracks.json`
-/// snapshot, loaded in one shot.
+/// Primary path: [fetchAll] browses the live bucket via the Storage `list`
+/// API (needs [SupabaseConfig.anonKey] + a `select` policy for `anon`),
+/// paging through the object names, then sorts them numerically and merges
+/// `_part1` / `_part2` files into one track.
+///
+/// Fallback: the bundled `assets/tracks.json` snapshot.
 class MeditationService {
   const MeditationService();
 
   static const String _manifestAsset = 'assets/tracks.json';
-  static const int pageSize = 40;
+  static const int _apiPageSize = 100;
 
   static final RegExp _audio = RegExp(r'\.mp3$', caseSensitive: false);
+  static final RegExp _partSuffix = RegExp(r'_part\d+$', caseSensitive: false);
+  static final RegExp _trailingNumber = RegExp(r'(\d+)\s*$');
 
-  /// Fetches one page of objects from the bucket, sorted by name.
-  Future<TrackPage> fetchPage({required int offset, int limit = pageSize}) async {
-    final res = await http.post(
-      SupabaseConfig.listEndpoint,
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': SupabaseConfig.anonKey,
-        'Authorization': 'Bearer ${SupabaseConfig.anonKey}',
-      },
-      body: jsonEncode({
-        'prefix': '',
-        'limit': limit,
-        'offset': offset,
-        'sortBy': {'column': 'name', 'order': 'asc'},
-      }),
-    );
+  /// Every audio object in the bucket, numerically ordered, multi-part merged.
+  Future<List<MeditationTrack>> fetchAll() async {
+    final names = <String>[];
+    var offset = 0;
 
-    if (res.statusCode != 200) {
-      throw Exception(
-        'Storage list failed (${res.statusCode}). '
-        '${res.body}',
+    while (true) {
+      final res = await http.post(
+        SupabaseConfig.listEndpoint,
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SupabaseConfig.anonKey,
+          'Authorization': 'Bearer ${SupabaseConfig.anonKey}',
+        },
+        body: jsonEncode({
+          'prefix': '',
+          'limit': _apiPageSize,
+          'offset': offset,
+          'sortBy': {'column': 'name', 'order': 'asc'},
+        }),
       );
+      if (res.statusCode != 200) {
+        throw Exception('Storage list failed (${res.statusCode}). ${res.body}');
+      }
+
+      final raw = (jsonDecode(res.body) as List).cast<Map<String, dynamic>>();
+      for (final obj in raw) {
+        final name = obj['name'] as String? ?? '';
+        if (obj['id'] == null) continue; // folder / placeholder
+        if (_audio.hasMatch(name)) names.add(name);
+      }
+
+      if (raw.length < _apiPageSize) break;
+      offset += raw.length;
+      if (offset > 20000) break; // hard safety stop
     }
 
-    final raw = (jsonDecode(res.body) as List).cast<Map<String, dynamic>>();
-    final tracks = <MeditationTrack>[];
-    for (final obj in raw) {
-      final name = obj['name'] as String? ?? '';
-      // Skip folders / placeholders and non-audio files.
-      if (obj['id'] == null) continue;
-      if (!_audio.hasMatch(name)) continue;
-      tracks.add(
-        MeditationTrack(
-          title: _titleFor(name),
-          urls: [SupabaseConfig.publicUrlFor(name)],
-          fileName: name,
-        ),
-      );
-    }
-
-    return TrackPage(
-      tracks: tracks,
-      nextOffset: offset + raw.length,
-      hasMore: raw.length == limit,
-    );
+    return _group(names);
   }
 
-  /// The bundled snapshot - every track at once. Used when there's no anon key
-  /// or the live list call fails.
+  /// The bundled snapshot - used when there's no anon key or the live call
+  /// fails.
   Future<List<MeditationTrack>> fetchBundled() async {
-    final data =
-        jsonDecode(await rootBundle.loadString(_manifestAsset)) as Map<String, dynamic>;
+    final data = jsonDecode(await rootBundle.loadString(_manifestAsset))
+        as Map<String, dynamic>;
     final base = (data['baseUrl'] as String).replaceAll(RegExp(r'/+$'), '');
     final entries = (data['tracks'] as List).cast<Map<String, dynamic>>();
 
@@ -96,6 +80,41 @@ class MeditationService {
     }).toList(growable: false);
   }
 
-  static String _titleFor(String objectName) =>
-      objectName.replaceAll(_audio, '').trim();
+  // --- helpers -------------------------------------------------------------
+
+  List<MeditationTrack> _group(List<String> names) {
+    final byBase = <String, List<String>>{};
+    for (final name in names) {
+      byBase.putIfAbsent(_baseName(name), () => <String>[]).add(name);
+    }
+
+    final tracks = byBase.values.map((files) {
+      files.sort();
+      return MeditationTrack(
+        title: _titleFor(files.first),
+        urls: [for (final f in files) SupabaseConfig.publicUrlFor(f)],
+        fileName: files.length == 1 ? files.first : null,
+      );
+    }).toList();
+
+    tracks.sort((a, b) {
+      final na = _numberIn(a.title);
+      final nb = _numberIn(b.title);
+      if (na != nb) return na.compareTo(nb);
+      return a.title.compareTo(b.title);
+    });
+    return tracks;
+  }
+
+  /// "Es Dhammo Sanantano 61_part2.mp3" -> "Es Dhammo Sanantano 61"
+  static String _baseName(String objectName) =>
+      objectName.replaceAll(_audio, '').replaceAll(_partSuffix, '').trim();
+
+  /// "Es Dhammo Sanantano 61_part2.mp3" -> "Es Dhammo Sanantano 61"
+  static String _titleFor(String objectName) => _baseName(objectName);
+
+  static int _numberIn(String s) {
+    final m = _trailingNumber.firstMatch(s);
+    return m == null ? 1 << 30 : int.parse(m.group(1)!);
+  }
 }
