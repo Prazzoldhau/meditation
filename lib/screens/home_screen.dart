@@ -70,6 +70,23 @@ class _HomeScreenState extends State<HomeScreen> {
         fetched = await _service.fetchBundled();
       }
 
+      // Live list returned nothing on the first page - almost always a missing
+      // Storage SELECT policy for `anon`. Fall back to the bundled snapshot.
+      if (fetched.isEmpty && _tracks.isEmpty && !_bundledFallback) {
+        _bundledFallback = true;
+        final bundled = await _service.fetchBundled();
+        if (!mounted) return;
+        setState(() {
+          _tracks
+            ..clear()
+            ..addAll(bundled);
+          _hasMore = false;
+          _loading = false;
+          _firstLoadDone = true;
+        });
+        return;
+      }
+
       if (!mounted) return;
       setState(() {
         if (_bundledFallback) _tracks.clear();

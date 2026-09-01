@@ -13,7 +13,10 @@ class SupabaseConfig {
 
   static const String anonKey = String.fromEnvironment(
     'SUPABASE_ANON_KEY',
-    defaultValue: '', // <-- paste the anon public key here to enable browsing
+    // anon / public key - safe to ship (RLS on storage.objects protects data).
+    // A --dart-define of the same name overrides this at build time.
+    defaultValue:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFyZHBzdHZpYnN0b25td2xtaGJ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgxMjQ3MTEsImV4cCI6MjEwMzcwMDcxMX0.1CixKOjnRG9sQrNsy4QCKcUU8mE6nUoxcx7nGgJ1KvQ',
   );
 
   /// True when we have a key and can call the Storage list API.
