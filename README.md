@@ -30,15 +30,33 @@ in `codemagic.yaml` regenerates `ios/` via `scripts/codemagic_pre_build.sh`.
 
 ## How it works
 
-- [`assets/tracks.json`](assets/tracks.json) holds `baseUrl` +  a list of
-  tracks. Each track's `files` array is one or more object names; a track with
-  two files (e.g. `… 61_part1.mp3` + `… 61_part2.mp3`) plays them back-to-back
-  as one meditation.
-- `lib/services/meditation_service.dart` loads that JSON and builds the
-  URL-encoded public links (`<baseUrl>/<Uri.encodeComponent(file)>`).
+### Track list — live browse, with an offline fallback
+
+- **Live browse** (preferred): `MeditationService.fetchPage()` pages through
+  the real bucket via the Storage `list` API, 40 objects at a time, as you
+  scroll (Facebook/TikTok-style). Each object is one row, titled by its real
+  filename. This needs `SupabaseConfig.anonKey` set (paste it into
+  `lib/supabase_config.dart`, or pass `--dart-define=SUPABASE_ANON_KEY=…`) —
+  the anon key is a *public* key, safe to ship; RLS protects the data. It also
+  needs a Storage policy letting `anon` run `SELECT` on the bucket:
+
+  ```sql
+  create policy "anon can list es dhammo sanatano"
+  on storage.objects for select to anon
+  using ( bucket_id = 'es dhammo sanatano' );
+  ```
+
+- **Offline fallback**: with no key, or if the list call fails, the app loads
+  the bundled [`assets/tracks.json`](assets/tracks.json) snapshot (all 121
+  tracks at once) and shows an "Offline list" badge. `tracks.json` also groups
+  `_part1` / `_part2` files into one track that plays back-to-back.
+
+- `lib/services/meditation_service.dart` builds the URL-encoded public links
+  (`<baseUrl>/<Uri.encodeComponent(file)>`) for both paths.
 - `lib/screens/player_screen.dart` plays a track with `just_audio` — a single
-  `AudioSource.uri` for one file, a `ConcatenatingAudioSource` for multi-part,
-  with a "Part n of m" indicator and skip buttons.
+  `AudioSource.uri` for one file, a `ConcatenatingAudioSource` for multi-part.
+  Controls: 10-second back / forward, play/pause, and previous/next-part on
+  multi-part tracks, plus a "Part n of m" indicator.
 - **Nothing is downloaded at startup** — only `tracks.json`. A track streams
   progressively when you open it (like a YouTube video): playback starts once
   ~1s is buffered (`AndroidLoadControl.bufferForPlaybackDuration`), the scrub

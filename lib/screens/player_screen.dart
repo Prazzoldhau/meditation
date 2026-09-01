@@ -79,6 +79,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
     super.dispose();
   }
 
+  void _seekBy(int seconds) {
+    final duration = _player.duration;
+    var target = _player.position + Duration(seconds: seconds);
+    if (target < Duration.zero) target = Duration.zero;
+    if (duration != null && target > duration) target = duration;
+    _player.seek(target);
+  }
+
   static String _fmt(Duration? d) {
     if (d == null) return '--:--';
     final h = d.inHours;
@@ -222,67 +230,85 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   Widget _controls(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        if (widget.track.isMultiPart)
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          if (widget.track.isMultiPart)
+            IconButton(
+              iconSize: 32,
+              tooltip: 'Previous part',
+              icon: const Icon(Icons.skip_previous),
+              onPressed: () => _player.seekToPrevious(),
+            ),
           IconButton(
             iconSize: 40,
-            icon: const Icon(Icons.skip_previous),
-            onPressed: () => _player.seekToPrevious(),
+            tooltip: 'Back 10 seconds',
+            icon: const Icon(Icons.replay_10),
+            onPressed: () => _seekBy(-10),
           ),
-        StreamBuilder<PlayerState>(
-          stream: _player.playerStateStream,
-          builder: (context, snapshot) {
-            final state = snapshot.data;
-            final processing = state?.processingState;
-            final busy = processing == ProcessingState.loading ||
-                processing == ProcessingState.buffering;
-            final playing = state?.playing ?? false;
-            final ended = processing == ProcessingState.completed;
+          StreamBuilder<PlayerState>(
+            stream: _player.playerStateStream,
+            builder: (context, snapshot) {
+              final state = snapshot.data;
+              final processing = state?.processingState;
+              final busy = processing == ProcessingState.loading ||
+                  processing == ProcessingState.buffering;
+              final playing = state?.playing ?? false;
+              final ended = processing == ProcessingState.completed;
 
-            return Stack(
-              alignment: Alignment.center,
-              children: [
-                IconButton(
-                  iconSize: 64,
-                  icon: Icon(
-                    ended
-                        ? Icons.replay_circle_filled
-                        : playing
-                            ? Icons.pause_circle_filled
-                            : Icons.play_circle_filled,
+              return Stack(
+                alignment: Alignment.center,
+                children: [
+                  IconButton(
+                    iconSize: 64,
+                    icon: Icon(
+                      ended
+                          ? Icons.replay_circle_filled
+                          : playing
+                              ? Icons.pause_circle_filled
+                              : Icons.play_circle_filled,
+                    ),
+                    onPressed: () {
+                      if (ended) {
+                        _player.seek(Duration.zero, index: 0);
+                        _player.play();
+                      } else if (playing) {
+                        _player.pause();
+                      } else {
+                        _player.play();
+                      }
+                    },
                   ),
-                  onPressed: () {
-                    if (ended) {
-                      _player.seek(Duration.zero, index: 0);
-                      _player.play();
-                    } else if (playing) {
-                      _player.pause();
-                    } else {
-                      _player.play();
-                    }
-                  },
-                ),
-                // thin ring over the button while (re)buffering - playback
-                // controls stay usable underneath
-                if (busy)
-                  const SizedBox(
-                    width: 64,
-                    height: 64,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-              ],
-            );
-          },
-        ),
-        if (widget.track.isMultiPart)
+                  // thin ring over the button while (re)buffering - playback
+                  // controls stay usable underneath
+                  if (busy)
+                    const SizedBox(
+                      width: 64,
+                      height: 64,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                ],
+              );
+            },
+          ),
           IconButton(
             iconSize: 40,
-            icon: const Icon(Icons.skip_next),
-            onPressed: () => _player.seekToNext(),
+            tooltip: 'Forward 10 seconds',
+            icon: const Icon(Icons.forward_10),
+            onPressed: () => _seekBy(10),
           ),
-      ],
+          if (widget.track.isMultiPart)
+            IconButton(
+              iconSize: 32,
+              tooltip: 'Next part',
+              icon: const Icon(Icons.skip_next),
+              onPressed: () => _player.seekToNext(),
+            ),
+        ],
+      ),
     );
   }
 

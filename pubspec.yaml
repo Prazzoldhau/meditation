@@ -10,6 +10,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  http: ^1.2.0
   just_audio: ^0.9.0
   # Foreground service + media notification so playback keeps going with the
   # screen locked / app backgrounded (Android otherwise suspends it after a
