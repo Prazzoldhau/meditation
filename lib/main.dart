@@ -1,8 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:just_audio_background/just_audio_background.dart';
 
 import 'screens/home_screen.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Wires up the Android foreground service + media-style notification, so a
+  // meditation keeps playing (and can still buffer) with the screen locked or
+  // the app in the background.
+  await JustAudioBackground.init(
+    androidNotificationChannelId: 'com.oshomeditation.osho_meditation.audio',
+    androidNotificationChannelName: 'Meditation playback',
+    androidNotificationOngoing: true,
+    androidStopForegroundOnPause: true,
+  );
+
   runApp(const OshoMeditationApp());
 }
 

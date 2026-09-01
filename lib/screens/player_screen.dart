@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:just_audio_background/just_audio_background.dart';
 
 import '../models/meditation_track.dart';
 
@@ -41,8 +42,21 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Future<void> _load() async {
     setState(() => _error = null);
     try {
+      final urls = widget.track.urls;
       final sources = [
-        for (final url in widget.track.urls) AudioSource.uri(Uri.parse(url)),
+        for (var i = 0; i < urls.length; i++)
+          AudioSource.uri(
+            Uri.parse(urls[i]),
+            // Required by just_audio_background - drives the lock-screen /
+            // notification metadata.
+            tag: MediaItem(
+              id: urls[i],
+              title: widget.track.title,
+              artist: widget.track.isMultiPart
+                  ? 'Osho Meditation · Part ${i + 1} of ${urls.length}'
+                  : 'Osho Meditation',
+            ),
+          ),
       ];
       await _player.setAudioSource(
         sources.length == 1

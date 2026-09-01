@@ -44,8 +44,15 @@ in `codemagic.yaml` regenerates `ios/` via `scripts/codemagic_pre_build.sh`.
   ~1s is buffered (`AndroidLoadControl.bufferForPlaybackDuration`), the scrub
   bar shows immediately, and a lighter bar behind it shows how far ahead the
   buffer has filled. Multi-part tracks use `useLazyPreparation` so part 2 isn't
-  touched until playback nears it. Audio stops when the app is backgrounded
-  (no `just_audio_background` / lock-screen controls yet).
+  touched until playback nears it.
+- **Background playback**: `just_audio_background` runs a foreground service +
+  media notification, so a meditation keeps playing (and buffering) with the
+  screen locked or the app backgrounded, with lock-screen play/pause/seek.
+  Setup: `JustAudioBackground.init()` in `main.dart`, the service/receiver +
+  `FOREGROUND_SERVICE*` / `WAKE_LOCK` permissions in `AndroidManifest.xml`,
+  the launcher activity switched to `AudioServiceActivity`, and every
+  `AudioSource` carries a `MediaItem` tag. `just_audio_background` is pinned to
+  `0.0.1-beta.15` (the release that matches `just_audio` 0.9.x).
 
 ### Adding / removing meditations
 
