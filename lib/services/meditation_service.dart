@@ -6,14 +6,15 @@ import 'package:http/http.dart' as http;
 import '../models/meditation_track.dart';
 import '../supabase_config.dart';
 
-/// Loads the meditation list.
+/// Loads audio track lists from Supabase Storage.
 ///
-/// Primary path: [fetchAll] browses the live bucket via the Storage `list`
+/// Primary path: [fetchAll] browses a live bucket via the Storage `list`
 /// API (needs [SupabaseConfig.anonKey] + a `select` policy for `anon`),
 /// paging through the object names, then sorts them numerically and merges
 /// `_part1` / `_part2` files into one track.
 ///
-/// Fallback: the bundled `assets/tracks.json` snapshot.
+/// Fallback (meditation bucket only): the bundled `assets/tracks.json`
+/// snapshot.
 class MeditationService {
   const MeditationService();
 
@@ -24,14 +25,14 @@ class MeditationService {
   static final RegExp _partSuffix = RegExp(r'_part\d+$', caseSensitive: false);
   static final RegExp _trailingNumber = RegExp(r'(\d+)\s*$');
 
-  /// Every audio object in the bucket, numerically ordered, multi-part merged.
-  Future<List<MeditationTrack>> fetchAll() async {
+  /// Every audio object in [bucket], numerically ordered, multi-part merged.
+  Future<List<MeditationTrack>> fetchAll(String bucket) async {
     final names = <String>[];
     var offset = 0;
 
     while (true) {
       final res = await http.post(
-        SupabaseConfig.listEndpoint,
+        SupabaseConfig.listEndpoint(bucket),
         headers: {
           'Content-Type': 'application/json',
           'apikey': SupabaseConfig.anonKey,
@@ -60,11 +61,11 @@ class MeditationService {
       if (offset > 20000) break; // hard safety stop
     }
 
-    return _group(names);
+    return _group(bucket, names);
   }
 
-  /// The bundled snapshot - used when there's no anon key or the live call
-  /// fails.
+  /// The bundled meditation snapshot - used when there's no anon key or the
+  /// live call fails.
   Future<List<MeditationTrack>> fetchBundled() async {
     final data = jsonDecode(await rootBundle.loadString(_manifestAsset))
         as Map<String, dynamic>;
@@ -82,7 +83,7 @@ class MeditationService {
 
   // --- helpers -------------------------------------------------------------
 
-  List<MeditationTrack> _group(List<String> names) {
+  List<MeditationTrack> _group(String bucket, List<String> names) {
     final byBase = <String, List<String>>{};
     for (final name in names) {
       byBase.putIfAbsent(_baseName(name), () => <String>[]).add(name);
@@ -92,7 +93,7 @@ class MeditationService {
       files.sort();
       return MeditationTrack(
         title: _titleFor(files.first),
-        urls: [for (final f in files) SupabaseConfig.publicUrlFor(f)],
+        urls: [for (final f in files) SupabaseConfig.publicUrlFor(bucket, f)],
         fileName: files.length == 1 ? files.first : null,
       );
     }).toList();

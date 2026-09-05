@@ -28,7 +28,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<List<MeditationTrack>> _load() async {
     if (SupabaseConfig.canBrowse) {
       try {
-        final live = await _service.fetchAll();
+        final live = await _service.fetchAll(SupabaseConfig.meditationBucket);
         if (live.isNotEmpty) {
           _bundledFallback = false;
           return live;

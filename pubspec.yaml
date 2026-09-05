@@ -12,6 +12,9 @@ dependencies:
     sdk: flutter
   http: ^1.2.0
   just_audio: ^0.9.0
+  # Lets the meditation track and the background-sound track share one audio
+  # session/category instead of each grabbing focus independently.
+  audio_session: ^0.1.24
   # Foreground service + media notification so playback keeps going with the
   # screen locked / app backgrounded (Android otherwise suspends it after a
   # while). Pinned to the release that pairs with just_audio 0.9.x.

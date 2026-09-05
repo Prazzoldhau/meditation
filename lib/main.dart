@@ -1,3 +1,4 @@
+import 'package:audio_session/audio_session.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 
@@ -15,6 +16,12 @@ Future<void> main() async {
     androidNotificationOngoing: true,
     androidStopForegroundOnPause: true,
   );
+
+  // One shared session so the meditation track and the background-sound
+  // track (two independent AudioPlayers) play side by side instead of each
+  // fighting the other for audio focus.
+  final session = await AudioSession.instance;
+  await session.configure(const AudioSessionConfiguration.music());
 
   runApp(const OshoMeditationApp());
 }

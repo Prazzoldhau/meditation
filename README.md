@@ -59,6 +59,40 @@ in `codemagic.yaml` regenerates `ios/` via `scripts/codemagic_pre_build.sh`.
   `AudioSource.uri` for one file, a `ConcatenatingAudioSource` for multi-part.
   Controls: 10-second back / forward, play/pause, and previous/next-part on
   multi-part tracks, plus a "Part n of m" indicator.
+
+### Background sound (second bucket, played side by side)
+
+A meditation can play alongside a looping ambient track from the
+**`soft music`** bucket, each with its own volume slider - like TikTok's sound
+picker, but two tracks mixed together instead of one replacing the other.
+
+- A **second, independent `AudioPlayer`** (`_bgPlayer` in `player_screen.dart`)
+  loads whichever sound is selected and loops it (`LoopMode.one`) for as long
+  as the meditation plays. It deliberately carries no `MediaItem` tag -
+  `just_audio_background` drives the lock-screen session for one player only
+  (the meditation); the background player just mixes in behind it and stays
+  alive on the same foreground service.
+- `main.dart` configures one shared `AudioSession` (`audio_session` package,
+  `.music()` preset) so the two players don't fight each other for audio
+  focus.
+- The picker is a horizontal scroll of chips (`_soundSelector`) fed by
+  `MeditationService.fetchAll(SupabaseConfig.softMusicBucket)` - same
+  live-listing code as the meditation list, different bucket. Tapping a chip
+  swaps `_bgPlayer`'s source without touching the meditation; "None" stops it.
+- Two `Slider`s (`_volumeControls`) call `setVolume()` on each player
+  independently, with a tap-to-mute icon that remembers the last level.
+
+**Needs its own Storage policy** (the meditation bucket's policy doesn't cover
+it) and the bucket marked Public for downloads, same as the meditation one:
+
+```sql
+create policy "anon can list soft music"
+on storage.objects for select to anon
+using ( bucket_id = 'soft music' );
+```
+
+Without it, the picker just shows "Background sounds unavailable" and the
+meditation still plays normally on its own.
 - **Nothing is downloaded at startup** — only `tracks.json`. A track streams
   progressively when you open it (like a YouTube video): playback starts once
   ~1s is buffered (`AndroidLoadControl.bufferForPlaybackDuration`), the scrub

@@ -3,6 +3,8 @@ import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 
 import '../models/meditation_track.dart';
+import '../services/meditation_service.dart';
+import '../supabase_config.dart';
 
 class PlayerScreen extends StatefulWidget {
   const PlayerScreen({super.key, required this.track});
@@ -31,12 +33,29 @@ class _PlayerScreenState extends State<PlayerScreen> {
     ),
   );
 
+  // Second, independent player for a looping background sound. Deliberately a
+  // plain AudioPlayer (no MediaItem tag) - just_audio_background drives the
+  // notification/lock-screen session for a single player only; this one just
+  // mixes in behind it and rides along on the same foreground service.
+  final _bgPlayer = AudioPlayer();
+
   String? _error;
+
+  List<MeditationTrack> _softTracks = const [];
+  bool _softLoading = true;
+  String? _softError;
+  int? _selectedSoft;
+
+  double _mainVolume = 1;
+  double _bgVolume = 0.5;
+  double _lastMainVolume = 1;
+  double _lastBgVolume = 0.5;
 
   @override
   void initState() {
     super.initState();
     _load();
+    _loadSoftTracks();
   }
 
   Future<void> _load() async {
@@ -73,9 +92,75 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
   }
 
+  Future<void> _loadSoftTracks() async {
+    if (!SupabaseConfig.canBrowse) {
+      setState(() => _softLoading = false);
+      return;
+    }
+    try {
+      const service = MeditationService();
+      final tracks = await service.fetchAll(SupabaseConfig.softMusicBucket);
+      if (!mounted) return;
+      setState(() {
+        _softTracks = tracks;
+        _softLoading = false;
+      });
+      if (tracks.isNotEmpty) {
+        await _selectSoft(0);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _softLoading = false;
+        _softError = '$e';
+      });
+    }
+  }
+
+  Future<void> _selectSoft(int index) async {
+    if (index < 0 || index >= _softTracks.length) return;
+    setState(() {
+      _selectedSoft = index;
+      _softError = null;
+    });
+    try {
+      await _bgPlayer.setAudioSource(
+        AudioSource.uri(Uri.parse(_softTracks[index].urls.first)),
+      );
+      await _bgPlayer.setLoopMode(LoopMode.one); // loop under the whole track
+      await _bgPlayer.setVolume(_bgVolume);
+      await _bgPlayer.play();
+    } catch (e) {
+      if (mounted) setState(() => _softError = 'Could not play this sound');
+    }
+  }
+
+  Future<void> _clearSoft() async {
+    setState(() => _selectedSoft = null);
+    await _bgPlayer.stop();
+  }
+
+  void _setMainVolume(double v) {
+    setState(() => _mainVolume = v);
+    _player.setVolume(v);
+    if (v > 0) _lastMainVolume = v;
+  }
+
+  void _toggleMainMute() =>
+      _setMainVolume(_mainVolume > 0 ? 0 : _lastMainVolume);
+
+  void _setBgVolume(double v) {
+    setState(() => _bgVolume = v);
+    _bgPlayer.setVolume(v);
+    if (v > 0) _lastBgVolume = v;
+  }
+
+  void _toggleBgMute() => _setBgVolume(_bgVolume > 0 ? 0 : _lastBgVolume);
+
   @override
   void dispose() {
     _player.dispose();
+    _bgPlayer.dispose();
     super.dispose();
   }
 
@@ -100,19 +185,25 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(title: Text(widget.track.title)),
-      body: Center(
-        child: Padding(
+      body: SafeArea(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.self_improvement, size: 96, color: scheme.primary),
-              const SizedBox(height: 24),
+              Icon(Icons.self_improvement, size: 88, color: scheme.primary),
+              const SizedBox(height: 20),
               if (widget.track.isMultiPart) _partIndicator(context),
               _progress(context),
               const SizedBox(height: 8),
               _controls(context),
               if (_error != null) _errorBar(context),
+              const SizedBox(height: 28),
+              const Divider(height: 1),
+              const SizedBox(height: 16),
+              _soundSelector(context),
+              const SizedBox(height: 20),
+              _volumeControls(context),
             ],
           ),
         ),
@@ -326,6 +417,171 @@ class _PlayerScreenState extends State<PlayerScreen> {
           FilledButton.tonal(onPressed: _load, child: const Text('Retry')),
         ],
       ),
+    );
+  }
+
+  // --- background sound: TikTok-style horizontal picker -------------------
+
+  Widget _soundSelector(BuildContext context) {
+    if (!SupabaseConfig.canBrowse) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 10),
+          child: Text(
+            'Background sound',
+            style: Theme.of(context).textTheme.labelLarge,
+          ),
+        ),
+        SizedBox(
+          height: 86,
+          child: _softLoading
+              ? const Center(
+                  child: SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                )
+              : (_softTracks.isEmpty
+                  ? Center(
+                      child: Text(
+                        _softError != null
+                            ? 'Background sounds unavailable'
+                            : 'No background sounds yet',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    )
+                  : ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: _softTracks.length + 1,
+                      separatorBuilder: (_, __) => const SizedBox(width: 10),
+                      itemBuilder: (context, i) {
+                        if (i == 0) {
+                          return _soundChip(
+                            context,
+                            label: 'None',
+                            icon: Icons.music_off,
+                            selected: _selectedSoft == null,
+                            onTap: _clearSoft,
+                          );
+                        }
+                        final idx = i - 1;
+                        return _soundChip(
+                          context,
+                          label: _softTracks[idx].title,
+                          icon: Icons.music_note,
+                          selected: _selectedSoft == idx,
+                          onTap: () => _selectSoft(idx),
+                        );
+                      },
+                    )),
+        ),
+      ],
+    );
+  }
+
+  Widget _soundChip(
+    BuildContext context, {
+    required String label,
+    required IconData icon,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        width: 84,
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+        decoration: BoxDecoration(
+          color: selected
+              ? scheme.primary.withValues(alpha: 0.18)
+              : scheme.onSurface.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: selected ? scheme.primary : Colors.transparent,
+            width: 1.5,
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              color: selected ? scheme.primary : scheme.onSurface.withValues(alpha: 0.7),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 11,
+                color: selected ? scheme.primary : null,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // --- independent volume sliders ------------------------------------------
+
+  Widget _volumeControls(BuildContext context) {
+    return Column(
+      children: [
+        _volumeRow(
+          icon: Icons.self_improvement,
+          volume: _mainVolume,
+          onChanged: _setMainVolume,
+          onMuteToggle: _toggleMainMute,
+        ),
+        const SizedBox(height: 2),
+        _volumeRow(
+          icon: Icons.music_note,
+          volume: _bgVolume,
+          onChanged: _setBgVolume,
+          onMuteToggle: _toggleBgMute,
+        ),
+      ],
+    );
+  }
+
+  Widget _volumeRow({
+    required IconData icon,
+    required double volume,
+    required ValueChanged<double> onChanged,
+    required VoidCallback onMuteToggle,
+  }) {
+    return Row(
+      children: [
+        IconButton(
+          icon: Icon(volume <= 0 ? Icons.volume_off : Icons.volume_up),
+          onPressed: onMuteToggle,
+        ),
+        Icon(icon, size: 18),
+        Expanded(
+          child: Slider(
+            value: volume,
+            onChanged: onChanged,
+          ),
+        ),
+        SizedBox(
+          width: 38,
+          child: Text(
+            '${(volume * 100).round()}%',
+            textAlign: TextAlign.end,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ),
+      ],
     );
   }
 }
