@@ -66,32 +66,49 @@ A meditation can play alongside a looping ambient track from the
 **`soft music`** bucket, each with its own volume slider - like TikTok's sound
 picker, but two tracks mixed together instead of one replacing the other.
 
-- A **second, independent `AudioPlayer`** (`_bgPlayer` in `player_screen.dart`)
-  loads whichever sound is selected and loops it (`LoopMode.one`) for as long
-  as the meditation plays. It deliberately carries no `MediaItem` tag -
-  `just_audio_background` drives the lock-screen session for one player only
-  (the meditation); the background player just mixes in behind it and stays
-  alive on the same foreground service.
-- `main.dart` configures one shared `AudioSession` (`audio_session` package,
-  `.music()` preset). On top of that, `_bgPlayer` is constructed with
-  `handleInterruptions: false, handleAudioSessionActivation: false` - by
-  default *every* just_audio player requests audio focus and auto-pauses
-  itself when it "loses" focus, including to another player in the same app,
-  so two default-configured players silently pause each other. Turning that
-  off on the background player makes the meditation player the sole
-  focus/session owner while the background player just renders audio
-  alongside it.
+**Why this uses a second audio *plugin*, not just a second player:**
+`just_audio_background` (used for the meditation's lock-screen/notification
+support) only tolerates a single `just_audio` `AudioPlayer` for the whole
+app - a second one throws `PlatformException("...supports only a single
+player instance")` the moment you try to use it. Its own README says as
+much ("supports the simple use case where an app has a single AudioPlayer
+instance"). So the background sound is played with **`audioplayers`**
+instead - a completely different plugin with its own platform channel, so
+it's never subject to that restriction.
+
+- `_bgPlayer` (an `audioplayers` `AudioPlayer`, imported as `ap` to avoid
+  clashing with `just_audio`'s own `AudioPlayer`) loads whichever sound is
+  selected and loops it (`ReleaseMode.loop`).
+- It's configured with `AudioContextConfig(focus: mixWithOthers).build()`,
+  which maps to Android's `AudioFocus.none` - it never requests audio focus,
+  so it can't pause (or be paused by) the meditation player. `main.dart`
+  additionally puts the meditation player on one shared `AudioSession`
+  (`audio_session` package, `.music()` preset).
+- `audioplayers`' `UrlSource` can't send custom HTTP headers, and `soft music`
+  isn't marked Public in Supabase (its public download URL 404s - "Bucket not
+  found"), so playback uses a **signed URL** instead:
+  `MeditationService.createSignedUrl(bucket, fileName)` calls Supabase's
+  `/object/sign/...` endpoint (same `select` policy below covers this) and
+  gets back a URL with a short-lived token *in the query string* - no headers
+  needed, fetched fresh each time a chip is tapped (1 hour expiry; a single
+  ambient loop track is a few minutes, so this comfortably outlasts one
+  playthrough, but not an hours-long session without reselecting).
 - The picker is a horizontal scroll of chips (`_soundSelector`) fed by
-  `MeditationService.fetchAll(SupabaseConfig.softMusicBucket)` - same
-  live-listing code as the meditation list, different bucket. Tapping a chip
-  swaps `_bgPlayer`'s source without touching the meditation; "None" stops it.
+  `MeditationService.fetchAll(SupabaseConfig.softMusicBucket, public: false)`
+  - same live-listing code as the meditation list, different bucket. Tapping
+  a chip signs + swaps `_bgPlayer`'s source without touching the meditation;
+  "None" stops it.
 - Two `Slider`s (`_volumeControls`) call `setVolume()` on each player
   independently, with a tap-to-mute icon that remembers the last level. The
-  background row also has its own play/pause button (`_bgPlayPauseButton`),
+  background row also has its own play/pause button (`_bgPlayPauseButton`,
+  `pause()`/`resume()` - not `play()` again, which would restart from 0),
   independent of the meditation's transport controls.
+- Any failure trying to actually play a selected sound renders as visible red
+  text under the picker (`_softError`), not silently - useful for diagnosing
+  anything Supabase/network-side without a debugger attached.
 
 **Needs its own Storage policy** (the meditation bucket's policy doesn't cover
-it):
+it) - this same policy also authorizes the signed-URL calls above:
 
 ```sql
 create policy "anon can list soft music"
@@ -101,16 +118,6 @@ using ( bucket_id = 'soft music' );
 
 Without it, the picker just shows "Background sounds unavailable" and the
 meditation still plays normally on its own.
-
-Unlike the meditation bucket, `soft music` is **not** marked Public in
-Supabase - its public download URL 404s ("Bucket not found"). Rather than
-requiring that dashboard change too, `MeditationService.fetchAll(bucket,
-public: false)` builds the *authenticated* object URL instead
-(`/object/{bucket}/{name}`, no `/public/`) and the resulting `MeditationTrack`
-carries `SupabaseConfig.authHeaders` (`apikey` / `Authorization: Bearer`),
-which `player_screen.dart` passes to `AudioSource.uri(..., headers: ...)`. The
-same `select` policy above covers both listing and this authenticated
-download.
 - **Nothing is downloaded at startup** — only `tracks.json`. A track streams
   progressively when you open it (like a YouTube video): playback starts once
   ~1s is buffered (`AndroidLoadControl.bufferForPlaybackDuration`), the scrub

@@ -1,5 +1,6 @@
+import 'package:audioplayers/audioplayers.dart' as ap;
 import 'package:flutter/material.dart';
-import 'package:just_audio/just_audio.dart';
+import 'package:just_audio/just_audio.dart' as ja;
 import 'package:just_audio_background/just_audio_background.dart';
 
 import '../models/meditation_track.dart';
@@ -18,36 +19,33 @@ class PlayerScreen extends StatefulWidget {
 class _PlayerScreenState extends State<PlayerScreen> {
   // Tuned so playback starts as soon as ~1s of audio is buffered, then keeps
   // filling in the background - like a YouTube video, not a full download.
-  final _player = AudioPlayer(
-    audioLoadConfiguration: const AudioLoadConfiguration(
-      androidLoadControl: AndroidLoadControl(
+  final _player = ja.AudioPlayer(
+    audioLoadConfiguration: const ja.AudioLoadConfiguration(
+      androidLoadControl: ja.AndroidLoadControl(
         minBufferDuration: Duration(seconds: 15),
         maxBufferDuration: Duration(seconds: 45),
         bufferForPlaybackDuration: Duration(milliseconds: 1000),
         bufferForPlaybackAfterRebufferDuration: Duration(seconds: 3),
       ),
-      darwinLoadControl: DarwinLoadControl(
+      darwinLoadControl: ja.DarwinLoadControl(
         automaticallyWaitsToMinimizeStalling: false,
         preferredForwardBufferDuration: Duration(seconds: 6),
       ),
     ),
   );
 
-  // Second, independent player for a looping background sound. Deliberately a
-  // plain AudioPlayer (no MediaItem tag) - just_audio_background drives the
-  // notification/lock-screen session for a single player only; this one just
-  // mixes in behind it and rides along on the same foreground service.
-  //
-  // handleInterruptions/handleAudioSessionActivation are OFF here: by default
-  // every just_audio player fights for audio focus, and each one auto-pauses
-  // when it "loses" focus to another - including another player in the same
-  // app. With two players that means whichever plays second silently pauses
-  // the first (or itself). Making _player the sole focus/session owner and
-  // this one a passive renderer is what actually lets both play together.
-  final _bgPlayer = AudioPlayer(
-    handleInterruptions: false,
-    handleAudioSessionActivation: false,
-  );
+  // Background sound deliberately uses a *different plugin* (audioplayers),
+  // not a second just_audio AudioPlayer: once JustAudioBackground.init() has
+  // run, just_audio allows only ONE of its own AudioPlayer instances in the
+  // whole app and throws PlatformException("...supports only a single player
+  // instance") for a second one. audioplayers has its own platform channel,
+  // so it isn't affected - and it's configured below to never request
+  // Android audio focus, so it can't pause (or be paused by) the meditation.
+  final _bgPlayer = ap.AudioPlayer();
+  static final _bgAudioContext = ap.AudioContextConfig(
+    focus: ap.AudioContextConfigFocus.mixWithOthers,
+    stayAwake: true,
+  ).build();
 
   String? _error;
 
@@ -74,7 +72,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       final urls = widget.track.urls;
       final sources = [
         for (var i = 0; i < urls.length; i++)
-          AudioSource.uri(
+          ja.AudioSource.uri(
             Uri.parse(urls[i]),
             // Required by just_audio_background - drives the lock-screen /
             // notification metadata.
@@ -90,7 +88,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       await _player.setAudioSource(
         sources.length == 1
             ? sources.first
-            : ConcatenatingAudioSource(
+            : ja.ConcatenatingAudioSource(
                 useLazyPreparation: true, // don't touch part 2 until near it
                 children: sources,
               ),
@@ -109,7 +107,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
     try {
       const service = MeditationService();
-      // Not marked Public in Supabase - stream via the authenticated URL.
+      // Not marked Public in Supabase - list works via the SELECT policy;
+      // playback goes through a freshly signed URL (see _selectSoft).
       final tracks = await service.fetchAll(
         SupabaseConfig.softMusicBucket,
         public: false,
@@ -138,20 +137,22 @@ class _PlayerScreenState extends State<PlayerScreen> {
       _softError = null;
     });
     try {
-      final track = _softTracks[index];
-      await _bgPlayer.setAudioSource(
-        AudioSource.uri(
-          Uri.parse(track.urls.first),
-          headers: track.headers,
-          // just_audio_background's docs say it's built for a single tagged
-          // player; give this source a tag too (distinct id prefix) in case
-          // an untagged source on a second player is what's silently failing.
-          tag: MediaItem(id: 'bg:${track.urls.first}', title: track.title),
-        ),
+      final fileName = _softTracks[index].fileName;
+      if (fileName == null) {
+        throw StateError('No file name for this sound');
+      }
+      const service = MeditationService();
+      final signedUrl = await service.createSignedUrl(
+        SupabaseConfig.softMusicBucket,
+        fileName,
       );
-      await _bgPlayer.setLoopMode(LoopMode.one); // loop under the whole track
-      await _bgPlayer.setVolume(_bgVolume);
-      await _bgPlayer.play();
+      await _bgPlayer.setReleaseMode(ap.ReleaseMode.loop); // loop the whole
+      // meditation
+      await _bgPlayer.play(
+        ap.UrlSource(signedUrl),
+        volume: _bgVolume,
+        ctx: _bgAudioContext,
+      );
     } catch (e) {
       // Show the real error - so a failure is actually visible/reportable
       // instead of the chip list just quietly doing nothing.
@@ -364,15 +365,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
             icon: const Icon(Icons.replay_10),
             onPressed: () => _seekBy(-10),
           ),
-          StreamBuilder<PlayerState>(
+          StreamBuilder<ja.PlayerState>(
             stream: _player.playerStateStream,
             builder: (context, snapshot) {
               final state = snapshot.data;
               final processing = state?.processingState;
-              final busy = processing == ProcessingState.loading ||
-                  processing == ProcessingState.buffering;
+              final busy = processing == ja.ProcessingState.loading ||
+                  processing == ja.ProcessingState.buffering;
               final playing = state?.playing ?? false;
-              final ended = processing == ProcessingState.completed;
+              final ended = processing == ja.ProcessingState.completed;
 
               return Stack(
                 alignment: Alignment.center,
@@ -594,26 +595,18 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   /// Play/pause for the background sound only, independent of the meditation.
   Widget _bgPlayPauseButton() {
-    return StreamBuilder<PlayerState>(
-      stream: _bgPlayer.playerStateStream,
+    return StreamBuilder<ap.PlayerState>(
+      stream: _bgPlayer.onPlayerStateChanged,
+      initialData: ap.PlayerState.stopped,
       builder: (context, snap) {
-        final state = snap.data;
-        final playing = state?.playing ?? false;
-        final busy = state?.processingState == ProcessingState.loading ||
-            state?.processingState == ProcessingState.buffering;
+        final playing = snap.data == ap.PlayerState.playing;
         final hasSource = _selectedSoft != null;
         return IconButton(
           tooltip: playing ? 'Pause background sound' : 'Play background sound',
-          icon: busy
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : Icon(playing ? Icons.pause_circle_outline : Icons.play_circle_outline),
+          icon: Icon(playing ? Icons.pause_circle_outline : Icons.play_circle_outline),
           onPressed: !hasSource
               ? null
-              : () => playing ? _bgPlayer.pause() : _bgPlayer.play(),
+              : () => playing ? _bgPlayer.pause() : _bgPlayer.resume(),
         );
       },
     );

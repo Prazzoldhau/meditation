@@ -71,6 +71,39 @@ class MeditationService {
     return _group(bucket, names, public: public);
   }
 
+  /// A short-lived, header-free download URL for one object in a private
+  /// bucket - the token lives in the query string, so any player that can't
+  /// send custom headers can still stream it directly.
+  Future<String> createSignedUrl(
+    String bucket,
+    String objectName, {
+    int expiresInSeconds = 3600,
+  }) async {
+    final res = await http.post(
+      SupabaseConfig.signEndpoint(bucket, objectName),
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SupabaseConfig.anonKey,
+        'Authorization': 'Bearer ${SupabaseConfig.anonKey}',
+      },
+      body: jsonEncode({'expiresIn': expiresInSeconds}),
+    );
+    if (res.statusCode != 200) {
+      throw Exception('Could not sign "$objectName" (${res.statusCode}). ${res.body}');
+    }
+
+    // {"signedURL": "/object/sign/<bucket>/<name>?token=..."} - the bucket
+    // and file name segments aren't URL-encoded in this response, so encode
+    // just the path portion and leave the query string as-is.
+    final signedPath =
+        (jsonDecode(res.body) as Map<String, dynamic>)['signedURL'] as String;
+    final qIndex = signedPath.indexOf('?');
+    final path = qIndex == -1 ? signedPath : signedPath.substring(0, qIndex);
+    final query = qIndex == -1 ? '' : signedPath.substring(qIndex);
+    final encodedPath = path.split('/').map(Uri.encodeComponent).join('/');
+    return '${SupabaseConfig.projectUrl}/storage/v1$encodedPath$query';
+  }
+
   /// The bundled meditation snapshot - used when there's no anon key or the
   /// live call fails.
   Future<List<MeditationTrack>> fetchBundled() async {

@@ -47,4 +47,12 @@ class SupabaseConfig {
   static Uri listEndpoint(String bucket) => Uri.parse(
         '$projectUrl/storage/v1/object/list/${Uri.encodeComponent(bucket)}',
       );
+
+  /// A short-lived, header-free download URL for a private bucket - the
+  /// token lives in the query string, so any player that can't send custom
+  /// headers (e.g. `audioplayers`) can still stream it directly.
+  static Uri signEndpoint(String bucket, String objectName) => Uri.parse(
+        '$projectUrl/storage/v1/object/sign/'
+        '${Uri.encodeComponent(bucket)}/${Uri.encodeComponent(objectName)}',
+      );
 }

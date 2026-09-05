@@ -15,6 +15,11 @@ dependencies:
   # Lets the meditation track and the background-sound track share one audio
   # session/category instead of each grabbing focus independently.
   audio_session: ^0.1.24
+  # Background sound uses this (not a 2nd just_audio AudioPlayer): once
+  # just_audio_background is initialized it allows only ONE just_audio player
+  # in the whole app and throws PlatformException for a second one.
+  # audioplayers has its own platform channel, so it isn't affected.
+  audioplayers: ^6.5.1
   # Foreground service + media notification so playback keeps going with the
   # screen locked / app backgrounded (Android otherwise suspends it after a
   # while). Pinned to the release that pairs with just_audio 0.9.x.
