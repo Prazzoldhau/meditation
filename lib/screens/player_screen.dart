@@ -37,7 +37,17 @@ class _PlayerScreenState extends State<PlayerScreen> {
   // plain AudioPlayer (no MediaItem tag) - just_audio_background drives the
   // notification/lock-screen session for a single player only; this one just
   // mixes in behind it and rides along on the same foreground service.
-  final _bgPlayer = AudioPlayer();
+  //
+  // handleInterruptions/handleAudioSessionActivation are OFF here: by default
+  // every just_audio player fights for audio focus, and each one auto-pauses
+  // when it "loses" focus to another - including another player in the same
+  // app. With two players that means whichever plays second silently pauses
+  // the first (or itself). Making _player the sole focus/session owner and
+  // this one a passive renderer is what actually lets both play together.
+  final _bgPlayer = AudioPlayer(
+    handleInterruptions: false,
+    handleAudioSessionActivation: false,
+  );
 
   String? _error;
 
@@ -557,8 +567,36 @@ class _PlayerScreenState extends State<PlayerScreen> {
           volume: _bgVolume,
           onChanged: _setBgVolume,
           onMuteToggle: _toggleBgMute,
+          leading: _bgPlayPauseButton(),
         ),
       ],
+    );
+  }
+
+  /// Play/pause for the background sound only, independent of the meditation.
+  Widget _bgPlayPauseButton() {
+    return StreamBuilder<PlayerState>(
+      stream: _bgPlayer.playerStateStream,
+      builder: (context, snap) {
+        final state = snap.data;
+        final playing = state?.playing ?? false;
+        final busy = state?.processingState == ProcessingState.loading ||
+            state?.processingState == ProcessingState.buffering;
+        final hasSource = _selectedSoft != null;
+        return IconButton(
+          tooltip: playing ? 'Pause background sound' : 'Play background sound',
+          icon: busy
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Icon(playing ? Icons.pause_circle_outline : Icons.play_circle_outline),
+          onPressed: !hasSource
+              ? null
+              : () => playing ? _bgPlayer.pause() : _bgPlayer.play(),
+        );
+      },
     );
   }
 
@@ -567,9 +605,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
     required double volume,
     required ValueChanged<double> onChanged,
     required VoidCallback onMuteToggle,
+    Widget? leading,
   }) {
     return Row(
       children: [
+        if (leading != null) leading,
         IconButton(
           icon: Icon(volume <= 0 ? Icons.volume_off : Icons.volume_up),
           onPressed: onMuteToggle,

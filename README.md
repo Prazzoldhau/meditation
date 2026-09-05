@@ -73,14 +73,22 @@ picker, but two tracks mixed together instead of one replacing the other.
   (the meditation); the background player just mixes in behind it and stays
   alive on the same foreground service.
 - `main.dart` configures one shared `AudioSession` (`audio_session` package,
-  `.music()` preset) so the two players don't fight each other for audio
-  focus.
+  `.music()` preset). On top of that, `_bgPlayer` is constructed with
+  `handleInterruptions: false, handleAudioSessionActivation: false` - by
+  default *every* just_audio player requests audio focus and auto-pauses
+  itself when it "loses" focus, including to another player in the same app,
+  so two default-configured players silently pause each other. Turning that
+  off on the background player makes the meditation player the sole
+  focus/session owner while the background player just renders audio
+  alongside it.
 - The picker is a horizontal scroll of chips (`_soundSelector`) fed by
   `MeditationService.fetchAll(SupabaseConfig.softMusicBucket)` - same
   live-listing code as the meditation list, different bucket. Tapping a chip
   swaps `_bgPlayer`'s source without touching the meditation; "None" stops it.
 - Two `Slider`s (`_volumeControls`) call `setVolume()` on each player
-  independently, with a tap-to-mute icon that remembers the last level.
+  independently, with a tap-to-mute icon that remembers the last level. The
+  background row also has its own play/pause button (`_bgPlayPauseButton`),
+  independent of the meditation's transport controls.
 
 **Needs its own Storage policy** (the meditation bucket's policy doesn't cover
 it):
