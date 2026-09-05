@@ -143,13 +143,19 @@ class _PlayerScreenState extends State<PlayerScreen> {
         AudioSource.uri(
           Uri.parse(track.urls.first),
           headers: track.headers,
+          // just_audio_background's docs say it's built for a single tagged
+          // player; give this source a tag too (distinct id prefix) in case
+          // an untagged source on a second player is what's silently failing.
+          tag: MediaItem(id: 'bg:${track.urls.first}', title: track.title),
         ),
       );
       await _bgPlayer.setLoopMode(LoopMode.one); // loop under the whole track
       await _bgPlayer.setVolume(_bgVolume);
       await _bgPlayer.play();
     } catch (e) {
-      if (mounted) setState(() => _softError = 'Could not play this sound');
+      // Show the real error - so a failure is actually visible/reportable
+      // instead of the chip list just quietly doing nothing.
+      if (mounted) setState(() => _softError = '$e');
     }
   }
 
@@ -497,6 +503,19 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       },
                     )),
         ),
+        // Visible even once tracks are loaded - a failure while actually
+        // trying to play a selected sound landed here invisibly before.
+        if (_softError != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 6, left: 4),
+            child: Text(
+              'Background sound error: $_softError',
+              style: TextStyle(
+                fontSize: 11,
+                color: Theme.of(context).colorScheme.error,
+              ),
+            ),
+          ),
       ],
     );
   }
