@@ -83,7 +83,7 @@ picker, but two tracks mixed together instead of one replacing the other.
   independently, with a tap-to-mute icon that remembers the last level.
 
 **Needs its own Storage policy** (the meditation bucket's policy doesn't cover
-it) and the bucket marked Public for downloads, same as the meditation one:
+it):
 
 ```sql
 create policy "anon can list soft music"
@@ -93,6 +93,16 @@ using ( bucket_id = 'soft music' );
 
 Without it, the picker just shows "Background sounds unavailable" and the
 meditation still plays normally on its own.
+
+Unlike the meditation bucket, `soft music` is **not** marked Public in
+Supabase - its public download URL 404s ("Bucket not found"). Rather than
+requiring that dashboard change too, `MeditationService.fetchAll(bucket,
+public: false)` builds the *authenticated* object URL instead
+(`/object/{bucket}/{name}`, no `/public/`) and the resulting `MeditationTrack`
+carries `SupabaseConfig.authHeaders` (`apikey` / `Authorization: Bearer`),
+which `player_screen.dart` passes to `AudioSource.uri(..., headers: ...)`. The
+same `select` policy above covers both listing and this authenticated
+download.
 - **Nothing is downloaded at startup** — only `tracks.json`. A track streams
   progressively when you open it (like a YouTube video): playback starts once
   ~1s is buffered (`AndroidLoadControl.bufferForPlaybackDuration`), the scrub

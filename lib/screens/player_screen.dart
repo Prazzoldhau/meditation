@@ -99,7 +99,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
     try {
       const service = MeditationService();
-      final tracks = await service.fetchAll(SupabaseConfig.softMusicBucket);
+      // Not marked Public in Supabase - stream via the authenticated URL.
+      final tracks = await service.fetchAll(
+        SupabaseConfig.softMusicBucket,
+        public: false,
+      );
       if (!mounted) return;
       setState(() {
         _softTracks = tracks;
@@ -124,8 +128,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
       _softError = null;
     });
     try {
+      final track = _softTracks[index];
       await _bgPlayer.setAudioSource(
-        AudioSource.uri(Uri.parse(_softTracks[index].urls.first)),
+        AudioSource.uri(
+          Uri.parse(track.urls.first),
+          headers: track.headers,
+        ),
       );
       await _bgPlayer.setLoopMode(LoopMode.one); // loop under the whole track
       await _bgPlayer.setVolume(_bgVolume);

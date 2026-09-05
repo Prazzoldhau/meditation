@@ -26,7 +26,14 @@ class MeditationService {
   static final RegExp _trailingNumber = RegExp(r'(\d+)\s*$');
 
   /// Every audio object in [bucket], numerically ordered, multi-part merged.
-  Future<List<MeditationTrack>> fetchAll(String bucket) async {
+  ///
+  /// Pass [public] = false for a bucket that isn't marked Public in Supabase -
+  /// tracks then carry [SupabaseConfig.authHeaders] and use the authenticated
+  /// object URL instead of the public one.
+  Future<List<MeditationTrack>> fetchAll(
+    String bucket, {
+    bool public = true,
+  }) async {
     final names = <String>[];
     var offset = 0;
 
@@ -61,7 +68,7 @@ class MeditationService {
       if (offset > 20000) break; // hard safety stop
     }
 
-    return _group(bucket, names);
+    return _group(bucket, names, public: public);
   }
 
   /// The bundled meditation snapshot - used when there's no anon key or the
@@ -83,7 +90,11 @@ class MeditationService {
 
   // --- helpers -------------------------------------------------------------
 
-  List<MeditationTrack> _group(String bucket, List<String> names) {
+  List<MeditationTrack> _group(
+    String bucket,
+    List<String> names, {
+    required bool public,
+  }) {
     final byBase = <String, List<String>>{};
     for (final name in names) {
       byBase.putIfAbsent(_baseName(name), () => <String>[]).add(name);
@@ -93,8 +104,14 @@ class MeditationService {
       files.sort();
       return MeditationTrack(
         title: _titleFor(files.first),
-        urls: [for (final f in files) SupabaseConfig.publicUrlFor(bucket, f)],
+        urls: [
+          for (final f in files)
+            public
+                ? SupabaseConfig.publicUrlFor(bucket, f)
+                : SupabaseConfig.authenticatedUrlFor(bucket, f),
+        ],
         fileName: files.length == 1 ? files.first : null,
+        headers: public ? null : SupabaseConfig.authHeaders,
       );
     }).toList();
 

@@ -27,9 +27,22 @@ class SupabaseConfig {
   /// True when we have a key and can call the Storage list API.
   static bool get canBrowse => anonKey.isNotEmpty;
 
+  /// For a bucket marked *Public* in Supabase - plain URL, no headers needed.
   static String publicUrlFor(String bucket, String objectName) =>
       '$projectUrl/storage/v1/object/public/'
       '${Uri.encodeComponent(bucket)}/${Uri.encodeComponent(objectName)}';
+
+  /// For a *private* bucket - same `anon` SELECT policy that allows listing
+  /// also allows this authenticated download URL, as long as [authHeaders]
+  /// are sent with every request (see `MeditationTrack.headers`).
+  static String authenticatedUrlFor(String bucket, String objectName) =>
+      '$projectUrl/storage/v1/object/'
+      '${Uri.encodeComponent(bucket)}/${Uri.encodeComponent(objectName)}';
+
+  static Map<String, String> get authHeaders => {
+        'apikey': anonKey,
+        'Authorization': 'Bearer $anonKey',
+      };
 
   static Uri listEndpoint(String bucket) => Uri.parse(
         '$projectUrl/storage/v1/object/list/${Uri.encodeComponent(bucket)}',
